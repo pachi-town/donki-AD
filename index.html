@@ -11,7 +11,7 @@
         body, html { margin: 0; padding: 0; height: 100%; font-family: sans-serif; overflow: hidden; }
         #app-container { display: flex; flex-direction: column; height: 100vh; position: relative; }
         #header { background-color: #000; color: #fff; padding: 10px; display: flex; justify-content: space-between; align-items: center; z-index: 1000; }
-        #header-banner { width: 100%; max-height: 60px; object-fit: cover; display: none; }
+        #header-banner { width: 100%; max-height: 60px; object-fit: cover; display: none; cursor: pointer; }
         #search-panel { background: #fff; padding: 10px; border-bottom: 1px solid #ccc; z-index: 1000; transition: max-height 0.3s; overflow: hidden; }
         #map-container { flex-grow: 1; position: relative; z-index: 1; }
         #map { height: 100%; width: 100%; }
@@ -36,6 +36,7 @@
             color: #d32f2f; border: 3px solid #d32f2f; padding: 8px 12px;
             font-weight: bold; font-size: 18px; border-radius: 8px;
             transform: rotate(-10deg); background: rgba(255, 255, 255, 0.9);
+            text-align: center;
         }
 
         /* Bottom Half-Modal */
@@ -72,7 +73,7 @@
     <img id="header-banner" src="" alt="Header Banner">
 
     <div id="search-panel">
-        <div class="flex justify-between items-center mb-2" onclick="toggleSearch()">
+        <div class="flex justify-between items-center mb-2" onclick="toggleSearch()" style="cursor: pointer;">
             <div class="font-bold flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
                 検索・絞り込み
@@ -80,15 +81,17 @@
             <svg id="search-chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 transition-transform"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
         </div>
         <div id="search-contents" class="space-y-3 hidden">
-            <select class="w-full border rounded p-2 text-sm"><option>都道府県を選択</option></select>
-            <select class="w-full border rounded p-2 text-sm"><option>市区町村を選択</option></select>
-            <div class="flex gap-2 overflow-x-auto pb-1">
-                <span class="bg-gray-200 px-3 py-1 rounded-full text-xs whitespace-nowrap">MEGAドンキ</span>
-                <span class="bg-gray-200 px-3 py-1 rounded-full text-xs whitespace-nowrap">ピカソ</span>
-                <span class="bg-gray-200 px-3 py-1 rounded-full text-xs whitespace-nowrap">ドン・キホーテ</span>
+            <select id="pref-select" class="w-full border rounded p-2 text-sm" onchange="updateCities(); filterMap();">
+                <option value="">都道府県を選択</option>
+            </select>
+            <select id="city-select" class="w-full border rounded p-2 text-sm" onchange="filterMap();">
+                <option value="">市区町村を選択</option>
+            </select>
+            <div class="flex gap-2 overflow-x-auto pb-1" id="category-filters">
+                <!-- JSで動的に追加されます -->
             </div>
             <label class="flex items-center gap-2 text-sm">
-                <input type="checkbox" id="show-unavailable" checked> 掲載不可店舗も表示する
+                <input type="checkbox" id="show-unavailable" checked onchange="filterMap();"> 掲載不可店舗も表示する
             </label>
         </div>
     </div>
@@ -104,12 +107,8 @@
     <!-- Bottom Modal for Products -->
     <div id="bottom-modal">
         <div class="modal-handle" onclick="closeModal()"></div>
-        <div class="modal-tabs" id="modal-tabs">
-            <!-- Tabs injected by JS -->
-        </div>
-        <div class="modal-content" id="modal-content">
-            <!-- Content injected by JS -->
-        </div>
+        <div class="modal-tabs" id="modal-tabs"></div>
+        <div class="modal-content" id="modal-content"></div>
     </div>
 </div>
 
@@ -149,27 +148,47 @@
         return arr;
     }
 
+    function extractPrefAndCity(address) {
+        const regex = /^(東京都|北海道|(?:京都|大阪)府|.{2,3}県)([^市郡]+[市郡]|.*?区|.*?町|.*?村)/;
+        const match = address.match(regex);
+        if(match) return { pref: match[1], city: match[2] };
+        return { pref: '', city: '' };
+    }
+
     // --- State ---
     let stores = [];
     let products = [];
     let map;
-    let markers = [];
     let icons = {};
+    let activeCategories = []; // 選択中のカテゴリフィルター
 
-    // Product short names for tabs
     const productTabs = ['BOXティッシュ', 'ポスター', 'ゲート', 'ティッシュ手渡し', '店舗ジャック'];
     let currentTabIndex = 0;
 
     async function initApp() {
-        // Fetch data
-        const [coordsData, statusData, pricesData, iconData] = await Promise.all([
+        const [coordsData, statusData, pricesData, iconData, bannerData] = await Promise.all([
             fetchCSV('店舗座標一覧'),
             fetchCSV('開催状況集計'),
             fetchCSV('Prices'),
-            fetchCSV('icon')
+            fetchCSV('icon'),
+            fetchCSV('ヘッダーバナー')
         ]);
 
-        // Process Icons (A: Category, B: URL)
+        // バナー処理
+        if(bannerData && bannerData.length > 1) {
+            const bannerUrl = bannerData[1][0];
+            const bannerLink = bannerData[1][1];
+            if(bannerUrl) {
+                const bannerImg = document.getElementById('header-banner');
+                bannerImg.src = bannerUrl;
+                bannerImg.style.display = 'block';
+                if(bannerLink) {
+                    bannerImg.onclick = () => window.open(bannerLink, '_blank');
+                }
+            }
+        }
+
+        // アイコン処理 (A: カテゴリ, B: URL)
         if(iconData && iconData.length > 1) {
             for(let i=1; i<iconData.length; i++) {
                 if(iconData[i][0] && iconData[i][1]) {
@@ -183,70 +202,54 @@
             }
         }
 
-        // Process Products (Prices sheet)
-        // A: 商材名, B: 数量・期間, C: 料金, D: 増減額, E: POINT
+        // 料金表処理
         if(pricesData && pricesData.length > 1) {
             let currentProd = null;
             for(let i=1; i<pricesData.length; i++) {
                 const row = pricesData[i];
                 if(!row[0]) continue;
                 if(!currentProd || currentProd.title !== row[0]) {
-                    currentProd = {
-                        title: row[0],
-                        point: row[4] || '',
-                        options: []
-                    };
+                    currentProd = { title: row[0], point: row[4] || '', options: [] };
                     products.push(currentProd);
                 }
-                currentProd.options.push({
-                    label: row[1],
-                    price: row[2],
-                    note: row[3]
-                });
+                currentProd.options.push({ label: row[1], price: row[2], note: row[3] });
             }
         }
 
-        // Default products if empty (fallback)
-        if(products.length === 0) {
-            products = [
-                { title: 'ドンキAD CMボックスティッシュ販売', point: 'ドン・キホーテ店内にてオリジナルティッシュを販売していただく事が可能です！', options: [{label: '3,000個', price: '1,985,940円', note: '自社デザインの場合 -30,000円'}] },
-                { title: 'ドンキAD A1ポスター掲示（ADスペース）', point: '店舗内にてポスターを掲示致します。', options: [{label: '1ヶ月間', price: '40,000円', note: 'DMMにて作成の場合 +30,000円'}] },
-                { title: 'ドンキAD インパクトゲート', point: '店頭・店内にある防犯ゲートを広告スペースに', options: [{label: '2本', price: '130,000円', note: '自社デザインの場合 -30,000円'}] },
-                { title: 'ドンキAD レジでのポケットティッシュ手渡し', point: 'お会計時にお買い物されたお客様へお配りします。', options: [{label: '1,000個', price: '142,500円', note: '自社デザインの場合 -30,000円'}] },
-                { title: 'ドンキAD 店舗内装飾ジャック', point: '店舗内を広告で埋め尽くす店内ジャック。', options: [{label: '1ヶ月間', price: '都度確認', note: 'DMMにて作成の場合 +30,000円'}] }
-            ];
-        }
-
-        // Process Stores
+        // 実績・ステータス処理 (A: 店舗名, E: 更新日, F~K: 実績, L: 施設情報)
         const statusMap = {};
         if(statusData && statusData.length > 1) {
             for(let i=1; i<statusData.length; i++) {
                 const row = statusData[i];
-                if(row[2]) { // C列: 店名
-                    statusMap[row[2]] = {
+                if(row[0]) { // A列が店舗名
+                    statusMap[row[0].trim()] = {
                         updatedAt: row[4] || '',
                         poster: row[5] || 'ー',
                         register: row[6] || 'ー',
                         tissue: row[7] || 'ー',
                         gate: row[9] || row[8] || 'ー',
                         jack: row[10] || 'ー',
-                        unavailable: row[11] || ''
+                        unavailable: row[11] || '' // L列: 掲載不可フラグ
                     };
                 }
             }
         }
 
+        // 店舗座標処理 (A: 店舗名, C: カテゴリ, D: 住所, E: Lat, F: Lng)
         if(coordsData && coordsData.length > 1) {
             for(let i=1; i<coordsData.length; i++) {
                 const row = coordsData[i];
-                const name = row[0];
+                const name = row[0] ? row[0].trim() : '';
                 if(!name || !row[4] || !row[5]) continue;
                 
                 const stat = statusMap[name] || { updatedAt: '', poster: 'ー', register: 'ー', tissue: 'ー', gate: 'ー', jack: 'ー', unavailable: '' };
-                
+                const locInfo = extractPrefAndCity(row[3] || '');
+
                 stores.push({
                     name: name,
                     category: row[2] || '',
+                    pref: locInfo.pref,
+                    city: locInfo.city,
                     lat: parseFloat(row[4]),
                     lng: parseFloat(row[5]),
                     updatedAt: stat.updatedAt,
@@ -257,27 +260,21 @@
                         gate: stat.gate,
                         register: stat.register,
                         jack: stat.jack
-                    }
+                    },
+                    marker: null // マーカーインスタンスを保持する用
                 });
             }
         }
 
-        if(stores.length === 0) {
-            stores.push({
-                name: 'モック店舗 (取得失敗)', category: 'MEGAドンキ', lat: 35.6895, lng: 139.6917, updatedAt: '2024/11/06', unavailable: '',
-                records: { tissue: '◯', poster: '×', gate: 'ー', register: '◯', jack: 'ー' }
-            });
-        }
-
         initMap();
         initModal();
+        initSearchUI();
     }
 
     function initMap() {
-        map = L.map('map').setView([35.6895, 139.6917], 13);
-        // OpenStreetMapを利用（認証不要）
+        map = L.map('map').setView([35.6895, 139.6917], 5);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
+            attribution: '&copy; OpenStreetMap'
         }).addTo(map);
 
         const bounds = [];
@@ -288,6 +285,7 @@
             }
             
             const marker = L.marker([store.lat, store.lng], markerOptions).addTo(map);
+            store.marker = marker; // フィルタリング用に保持
             bounds.push([store.lat, store.lng]);
 
             let isUnavailable = store.unavailable !== '';
@@ -301,7 +299,7 @@
                 <div class="popup-body">
                     ${isUnavailable ? `
                     <div class="unavailable-overlay">
-                        <div class="unavailable-stamp">掲載不可 (施設都合上)</div>
+                        <div class="unavailable-stamp">掲載不可<br>(施設都合上)</div>
                     </div>` : ''}
                     
                     <div class="status-row">
@@ -328,7 +326,75 @@
         }
     }
 
-    // --- Search Panel ---
+    // --- Search & Filter Logic ---
+    function initSearchUI() {
+        // 都道府県のプルダウン生成
+        const prefs = [...new Set(stores.map(s => s.pref).filter(Boolean))].sort();
+        const prefSelect = document.getElementById('pref-select');
+        prefs.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p; opt.textContent = p;
+            prefSelect.appendChild(opt);
+        });
+
+        // カテゴリボタンの生成 (iconリストから)
+        const catContainer = document.getElementById('category-filters');
+        const categories = [...new Set(stores.map(s => s.category).filter(Boolean))];
+        categories.forEach(cat => {
+            const span = document.createElement('span');
+            span.className = 'bg-gray-200 px-3 py-1 rounded-full text-xs whitespace-nowrap cursor-pointer transition-colors';
+            span.textContent = cat;
+            span.onclick = () => {
+                if(activeCategories.includes(cat)) {
+                    activeCategories = activeCategories.filter(c => c !== cat);
+                    span.classList.replace('bg-yellow-400', 'bg-gray-200');
+                    span.classList.remove('font-bold');
+                } else {
+                    activeCategories.push(cat);
+                    span.classList.replace('bg-gray-200', 'bg-yellow-400');
+                    span.classList.add('font-bold');
+                }
+                filterMap();
+            };
+            catContainer.appendChild(span);
+        });
+    }
+
+    window.updateCities = function() {
+        const selectedPref = document.getElementById('pref-select').value;
+        const citySelect = document.getElementById('city-select');
+        citySelect.innerHTML = '<option value="">市区町村を選択</option>';
+        
+        if (selectedPref) {
+            const cities = [...new Set(stores.filter(s => s.pref === selectedPref).map(s => s.city).filter(Boolean))].sort();
+            cities.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c; opt.textContent = c;
+                citySelect.appendChild(opt);
+            });
+        }
+    }
+
+    window.filterMap = function() {
+        const selectedPref = document.getElementById('pref-select').value;
+        const selectedCity = document.getElementById('city-select').value;
+        const showUnavailable = document.getElementById('show-unavailable').checked;
+        
+        stores.forEach(store => {
+            let isVisible = true;
+            if (selectedPref && store.pref !== selectedPref) isVisible = false;
+            if (selectedCity && store.city !== selectedCity) isVisible = false;
+            if (activeCategories.length > 0 && !activeCategories.includes(store.category)) isVisible = false;
+            if (!showUnavailable && store.unavailable !== '') isVisible = false; // L列に値があれば非表示
+            
+            if (isVisible) {
+                if (!map.hasLayer(store.marker)) store.marker.addTo(map);
+            } else {
+                if (map.hasLayer(store.marker)) map.removeLayer(store.marker);
+            }
+        });
+    }
+
     let searchOpen = false;
     function toggleSearch() {
         searchOpen = !searchOpen;
@@ -355,7 +421,7 @@
             tab.onclick = () => selectTab(i);
             tabsContainer.appendChild(tab);
         });
-        renderModalContent(0);
+        if(products.length > 0) renderModalContent(0);
     }
 
     function selectTab(index) {
