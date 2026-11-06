@@ -16,7 +16,6 @@
         #map-container { flex-grow: 1; position: relative; z-index: 1; }
         #map { height: 100%; width: 100%; }
         
-        /* Modal Styles */
         .leaflet-popup-content-wrapper { border-radius: 12px; padding: 0; overflow: hidden; }
         .leaflet-popup-content { margin: 0; width: 300px !important; }
         .popup-header { padding: 12px; font-weight: bold; font-size: 16px; border-bottom: 1px solid #eee; }
@@ -26,7 +25,6 @@
         .status-item { display: flex; justify-content: space-between; font-size: 13px; }
         .note { font-size: 11px; color: #666; margin-top: 10px; }
         
-        /* Unavailable Overlay */
         .unavailable-overlay {
             position: absolute; top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(2px);
@@ -39,7 +37,6 @@
             text-align: center;
         }
 
-        /* Bottom Half-Modal */
         #bottom-modal {
             position: absolute; bottom: -100%; left: 0; width: 100%; height: 70vh;
             background: #fff; border-radius: 20px 20px 0 0; box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
@@ -53,7 +50,6 @@
         .modal-tab.active { color: #000; font-weight: bold; border-bottom: 2px solid #ffcc00; }
         .modal-content { padding: 20px; overflow-y: auto; flex-grow: 1; }
         
-        /* Floating Button */
         #floating-btn {
             position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
             background: #000; color: #ffcc00; padding: 12px 24px; border-radius: 30px;
@@ -81,15 +77,25 @@
             <svg id="search-chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 transition-transform"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
         </div>
         <div id="search-contents" class="space-y-3 hidden">
+            <!-- 距離検索 UI追加 -->
+            <div class="flex gap-2 items-center">
+                <button onclick="getUserLocation()" class="bg-blue-600 text-white px-3 py-2 rounded text-sm font-bold flex-shrink-0">📍現在地から</button>
+                <select id="radius-select" class="border rounded p-2 text-sm flex-grow" onchange="filterMap()">
+                    <option value="">距離指定なし</option>
+                    <option value="5">半径 5km以内</option>
+                    <option value="10">半径 10km以内</option>
+                    <option value="30">半径 30km以内</option>
+                    <option value="50">半径 50km以内</option>
+                </select>
+            </div>
+            
             <select id="pref-select" class="w-full border rounded p-2 text-sm" onchange="updateCities(); filterMap();">
                 <option value="">都道府県を選択</option>
             </select>
             <select id="city-select" class="w-full border rounded p-2 text-sm" onchange="filterMap();">
                 <option value="">市区町村を選択</option>
             </select>
-            <div class="flex gap-2 overflow-x-auto pb-1" id="category-filters">
-                <!-- JSで動的に追加されます -->
-            </div>
+            <div class="flex gap-2 overflow-x-auto pb-1" id="category-filters"></div>
             <label class="flex items-center gap-2 text-sm">
                 <input type="checkbox" id="show-unavailable" checked onchange="filterMap();"> 掲載不可店舗も表示する
             </label>
@@ -104,7 +110,6 @@
         </button>
     </div>
 
-    <!-- Bottom Modal for Products -->
     <div id="bottom-modal">
         <div class="modal-handle" onclick="closeModal()"></div>
         <div class="modal-tabs" id="modal-tabs"></div>
@@ -113,18 +118,16 @@
 </div>
 
 <script>
-    // --- Data Fetching (CSV) ---
     const SHEET_ID = '1wo0qLk-eYag_tqp-kZwE6CpNdFACwPWTtFCroxHdk1s';
     
     async function fetchCSV(sheetName) {
         const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
         try {
             const res = await fetch(url);
-            if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+            if (!res.ok) return [];
             const text = await res.text();
             return parseCSV(text);
         } catch (e) {
-            console.error(`Failed to fetch ${sheetName}:`, e);
             return [];
         }
     }
@@ -148,6 +151,18 @@
         return arr;
     }
 
+    // 列の順番が変わっても確実にデータを拾うための関数
+    function getColIndex(headers, keywords) {
+        if(!headers) return -1;
+        for (let i = 0; i < headers.length; i++) {
+            if (!headers[i]) continue;
+            for (let kw of keywords) {
+                if (headers[i].includes(kw)) return i;
+            }
+        }
+        return -1;
+    }
+
     function extractPrefAndCity(address) {
         const regex = /^(東京都|北海道|(?:京都|大阪)府|.{2,3}県)([^市郡]+[市郡]|.*?区|.*?町|.*?村)/;
         const match = address.match(regex);
@@ -155,15 +170,28 @@
         return { pref: '', city: '' };
     }
 
-    // --- State ---
+    // 2点間の距離を計算（ハバシン公式）
+    function getDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371; 
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    }
+
     let stores = [];
     let products = [];
     let map;
     let icons = {};
-    let activeCategories = []; // 選択中のカテゴリフィルター
+    let activeCategories = []; 
+    let userLat = null;
+    let userLng = null;
+    let userMarker = null;
 
     const productTabs = ['BOXティッシュ', 'ポスター', 'ゲート', 'ティッシュ手渡し', '店舗ジャック'];
-    let currentTabIndex = 0;
 
     async function initApp() {
         const [coordsData, statusData, pricesData, iconData, bannerData] = await Promise.all([
@@ -174,7 +202,6 @@
             fetchCSV('ヘッダーバナー')
         ]);
 
-        // バナー処理
         if(bannerData && bannerData.length > 1) {
             const bannerUrl = bannerData[1][0];
             const bannerLink = bannerData[1][1];
@@ -182,27 +209,20 @@
                 const bannerImg = document.getElementById('header-banner');
                 bannerImg.src = bannerUrl;
                 bannerImg.style.display = 'block';
-                if(bannerLink) {
-                    bannerImg.onclick = () => window.open(bannerLink, '_blank');
-                }
+                if(bannerLink) bannerImg.onclick = () => window.open(bannerLink, '_blank');
             }
         }
 
-        // アイコン処理 (A: カテゴリ, B: URL)
         if(iconData && iconData.length > 1) {
             for(let i=1; i<iconData.length; i++) {
                 if(iconData[i][0] && iconData[i][1]) {
                     icons[iconData[i][0]] = L.icon({
-                        iconUrl: iconData[i][1],
-                        iconSize: [32, 32],
-                        iconAnchor: [16, 32],
-                        popupAnchor: [0, -32]
+                        iconUrl: iconData[i][1], iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32]
                     });
                 }
             }
         }
 
-        // 料金表処理
         if(pricesData && pricesData.length > 1) {
             let currentProd = null;
             for(let i=1; i<pricesData.length; i++) {
@@ -216,42 +236,65 @@
             }
         }
 
-        // 実績・ステータス処理 (A: 店舗名, E: 更新日, F~K: 実績, L: 施設情報)
         const statusMap = {};
-        if(statusData && statusData.length > 1) {
+        if(statusData && statusData.length > 0) {
+            const stHead = statusData[0];
+            let nCol = getColIndex(stHead, ['店舗', '店名']);
+            if(nCol === -1) nCol = 0; 
+            const uCol = getColIndex(stHead, ['更新']);
+            const pCol = getColIndex(stHead, ['ポスター']);
+            const rCol = getColIndex(stHead, ['手渡し', 'レジ']);
+            const tCol = getColIndex(stHead, ['BOX', 'ティッシュ']);
+            const gCol = getColIndex(stHead, ['ゲート']);
+            const jCol = getColIndex(stHead, ['ジャック']);
+            const unCol = getColIndex(stHead, ['施設', '不可', '備考']);
+            
             for(let i=1; i<statusData.length; i++) {
                 const row = statusData[i];
-                if(row[0]) { // A列が店舗名
-                    statusMap[row[0].trim()] = {
-                        updatedAt: row[4] || '',
-                        poster: row[5] || 'ー',
-                        register: row[6] || 'ー',
-                        tissue: row[7] || 'ー',
-                        gate: row[9] || row[8] || 'ー',
-                        jack: row[10] || 'ー',
-                        unavailable: row[11] || '' // L列: 掲載不可フラグ
+                const name = row[nCol] ? row[nCol].trim() : '';
+                if(name) {
+                    statusMap[name] = {
+                        updatedAt: uCol !== -1 ? (row[uCol] || '') : '',
+                        poster: pCol !== -1 ? (row[pCol] || 'ー') : 'ー',
+                        register: rCol !== -1 ? (row[rCol] || 'ー') : 'ー',
+                        tissue: tCol !== -1 ? (row[tCol] || 'ー') : 'ー',
+                        gate: gCol !== -1 ? (row[gCol] || 'ー') : 'ー',
+                        jack: jCol !== -1 ? (row[jCol] || 'ー') : 'ー',
+                        unavailable: unCol !== -1 ? (row[unCol] || '') : ''
                     };
                 }
             }
         }
 
-        // 店舗座標処理 (A: 店舗名, C: カテゴリ, D: 住所, E: Lat, F: Lng)
-        if(coordsData && coordsData.length > 1) {
+        if(coordsData && coordsData.length > 0) {
+            const coHead = coordsData[0];
+            let cNameCol = getColIndex(coHead, ['店舗', '店名']);
+            let cCatCol = getColIndex(coHead, ['カテゴリ']);
+            let cAddrCol = getColIndex(coHead, ['住所', '所在地']);
+            let cLatCol = getColIndex(coHead, ['緯度', 'Lat']);
+            let cLngCol = getColIndex(coHead, ['経度', 'Lng']);
+            
+            if(cNameCol === -1) cNameCol = 0;
+            if(cLatCol === -1) cLatCol = 4;
+            if(cLngCol === -1) cLngCol = 5;
+
             for(let i=1; i<coordsData.length; i++) {
                 const row = coordsData[i];
-                const name = row[0] ? row[0].trim() : '';
-                if(!name || !row[4] || !row[5]) continue;
+                const name = row[cNameCol] ? row[cNameCol].trim() : '';
+                const latStr = row[cLatCol];
+                const lngStr = row[cLngCol];
+                if(!name || !latStr || !lngStr) continue;
                 
                 const stat = statusMap[name] || { updatedAt: '', poster: 'ー', register: 'ー', tissue: 'ー', gate: 'ー', jack: 'ー', unavailable: '' };
-                const locInfo = extractPrefAndCity(row[3] || '');
+                const locInfo = extractPrefAndCity(cAddrCol !== -1 ? row[cAddrCol] : '');
 
                 stores.push({
                     name: name,
-                    category: row[2] || '',
+                    category: cCatCol !== -1 ? row[cCatCol] : '',
                     pref: locInfo.pref,
                     city: locInfo.city,
-                    lat: parseFloat(row[4]),
-                    lng: parseFloat(row[5]),
+                    lat: parseFloat(latStr),
+                    lng: parseFloat(lngStr),
                     updatedAt: stat.updatedAt,
                     unavailable: stat.unavailable,
                     records: {
@@ -261,7 +304,7 @@
                         register: stat.register,
                         jack: stat.jack
                     },
-                    marker: null // マーカーインスタンスを保持する用
+                    marker: null
                 });
             }
         }
@@ -280,20 +323,14 @@
         const bounds = [];
         stores.forEach(store => {
             const markerOptions = {};
-            if (icons[store.category]) {
-                markerOptions.icon = icons[store.category];
-            }
+            if (icons[store.category]) markerOptions.icon = icons[store.category];
             
             const marker = L.marker([store.lat, store.lng], markerOptions).addTo(map);
-            store.marker = marker; // フィルタリング用に保持
+            store.marker = marker; 
             bounds.push([store.lat, store.lng]);
 
             let isUnavailable = store.unavailable !== '';
             let dateText = store.updatedAt ? store.updatedAt : '未実施';
-            let noteText = store.updatedAt ? 
-                '※過去の実績であり、現在は状況が異なる場合があります。お問い合わせください。' : 
-                '※過去開催実績がないためお問い合わせください。';
-
             let popupContent = `
                 <div class="popup-header">${store.name}</div>
                 <div class="popup-body">
@@ -310,25 +347,41 @@
                     <div class="mt-3 mb-1 text-xs font-bold text-gray-400">過去の広告実績</div>
                     <div class="status-grid">
                         <div class="status-item"><span>BOXティッシュ</span> <span>${store.records.tissue}</span></div>
-                        <div class="status-item"><span>A1ポスター掲示</span> <span>${store.records.poster}</span></div>
+                        <div class="status-item"><span>A1ポスター</span> <span>${store.records.poster}</span></div>
                         <div class="status-item"><span>ゲート</span> <span>${store.records.gate}</span></div>
                         <div class="status-item"><span>ティッシュ手渡し</span> <span>${store.records.register}</span></div>
                         <div class="status-item"><span>店舗ジャック</span> <span>${store.records.jack}</span></div>
                     </div>
-                    <div class="note">${noteText}</div>
                 </div>
             `;
             marker.bindPopup(popupContent);
         });
 
-        if (bounds.length > 0) {
-            map.fitBounds(bounds, { padding: [50, 50] });
-        }
+        if (bounds.length > 0) map.fitBounds(bounds, { padding: [50, 50] });
     }
 
-    // --- Search & Filter Logic ---
+    function getUserLocation() {
+        if (!navigator.geolocation) {
+            alert("お使いのブラウザは位置情報に対応していません。");
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                userLat = position.coords.latitude;
+                userLng = position.coords.longitude;
+                
+                if(userMarker) map.removeLayer(userMarker);
+                userMarker = L.marker([userLat, userLng]).addTo(map).bindPopup("<b>現在地</b>").openPopup();
+                map.setView([userLat, userLng], 12);
+                
+                document.getElementById('radius-select').value = "10"; // デフォルト10km
+                filterMap();
+            },
+            () => { alert("位置情報の取得に失敗しました。スマホの設定を確認してください。"); }
+        );
+    }
+
     function initSearchUI() {
-        // 都道府県のプルダウン生成
         const prefs = [...new Set(stores.map(s => s.pref).filter(Boolean))].sort();
         const prefSelect = document.getElementById('pref-select');
         prefs.forEach(p => {
@@ -337,7 +390,6 @@
             prefSelect.appendChild(opt);
         });
 
-        // カテゴリボタンの生成 (iconリストから)
         const catContainer = document.getElementById('category-filters');
         const categories = [...new Set(stores.map(s => s.category).filter(Boolean))];
         categories.forEach(cat => {
@@ -364,7 +416,6 @@
         const selectedPref = document.getElementById('pref-select').value;
         const citySelect = document.getElementById('city-select');
         citySelect.innerHTML = '<option value="">市区町村を選択</option>';
-        
         if (selectedPref) {
             const cities = [...new Set(stores.filter(s => s.pref === selectedPref).map(s => s.city).filter(Boolean))].sort();
             cities.forEach(c => {
@@ -379,13 +430,19 @@
         const selectedPref = document.getElementById('pref-select').value;
         const selectedCity = document.getElementById('city-select').value;
         const showUnavailable = document.getElementById('show-unavailable').checked;
+        const radiusVal = document.getElementById('radius-select').value;
         
         stores.forEach(store => {
             let isVisible = true;
             if (selectedPref && store.pref !== selectedPref) isVisible = false;
             if (selectedCity && store.city !== selectedCity) isVisible = false;
             if (activeCategories.length > 0 && !activeCategories.includes(store.category)) isVisible = false;
-            if (!showUnavailable && store.unavailable !== '') isVisible = false; // L列に値があれば非表示
+            if (!showUnavailable && store.unavailable !== '') isVisible = false; 
+            
+            if (radiusVal && userLat && userLng) {
+                const dist = getDistance(userLat, userLng, store.lat, store.lng);
+                if(dist > parseFloat(radiusVal)) isVisible = false;
+            }
             
             if (isVisible) {
                 if (!map.hasLayer(store.marker)) store.marker.addTo(map);
@@ -409,7 +466,6 @@
         }
     }
 
-    // --- Modal ---
     function initModal() {
         const tabsContainer = document.getElementById('modal-tabs');
         tabsContainer.innerHTML = '';
@@ -425,7 +481,6 @@
     }
 
     function selectTab(index) {
-        currentTabIndex = index;
         document.querySelectorAll('.modal-tab').forEach((t, i) => {
             t.className = `modal-tab ${i === index ? 'active' : ''}`;
         });
@@ -470,7 +525,6 @@
     function openModal() { document.getElementById('bottom-modal').classList.add('open'); }
     function closeModal() { document.getElementById('bottom-modal').classList.remove('open'); }
 
-    // Bootstrap
     window.onload = initApp;
 </script>
 </body>
