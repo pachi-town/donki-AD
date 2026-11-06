@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ドンキAD MAP</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; font-family: sans-serif; overflow: hidden; }
+        #app-container { display: flex; flex-direction: column; height: 100vh; position: relative; }
+        #header { background-color: #000; color: #fff; padding: 10px; display: flex; justify-content: space-between; align-items: center; z-index: 1000; }
+        #header-banner { width: 100%; max-height: 60px; object-fit: cover; display: none; }
+        #search-panel { background: #fff; padding: 10px; border-bottom: 1px solid #ccc; z-index: 1000; transition: max-height 0.3s; overflow: hidden; }
+        #map-container { flex-grow: 1; position: relative; z-index: 1; }
+        #map { height: 100%; width: 100%; }
+        
+        /* Modal Styles */
+        .leaflet-popup-content-wrapper { border-radius: 12px; padding: 0; overflow: hidden; }
+        .leaflet-popup-content { margin: 0; width: 300px !important; }
+        .popup-header { padding: 12px; font-weight: bold; font-size: 16px; border-bottom: 1px solid #eee; }
+        .popup-body { padding: 12px; position: relative; }
+        .status-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
+        .status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: #f9f9f9; padding: 10px; border-radius: 8px; margin-bottom: 10px; }
+        .status-item { display: flex; justify-content: space-between; font-size: 13px; }
+        .note { font-size: 11px; color: #666; margin-top: 10px; }
+        
+        /* Unavailable Overlay */
+        .unavailable-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(2px);
+            display: flex; justify-content: center; align-items: center; z-index: 10;
+        }
+        .unavailable-stamp {
+            color: #d32f2f; border: 3px solid #d32f2f; padding: 8px 12px;
+            font-weight: bold; font-size: 18px; border-radius: 8px;
+            transform: rotate(-10deg); background: rgba(255, 255, 255, 0.9);
+        }
+
+        /* Bottom Half-Modal */
+        #bottom-modal {
+            position: absolute; bottom: -100%; left: 0; width: 100%; height: 70vh;
+            background: #fff; border-radius: 20px 20px 0 0; box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            transition: bottom 0.3s cubic-bezier(0.4, 0, 0.2, 1); z-index: 2000;
+            display: flex; flex-direction: column;
+        }
+        #bottom-modal.open { bottom: 0; }
+        .modal-handle { width: 40px; height: 5px; background: #ccc; border-radius: 3px; margin: 10px auto; }
+        .modal-tabs { display: flex; overflow-x: auto; border-bottom: 1px solid #eee; padding: 0 10px; }
+        .modal-tab { padding: 10px 15px; white-space: nowrap; font-size: 14px; color: #666; cursor: pointer; }
+        .modal-tab.active { color: #000; font-weight: bold; border-bottom: 2px solid #ffcc00; }
+        .modal-content { padding: 20px; overflow-y: auto; flex-grow: 1; }
+        
+        /* Floating Button */
+        #floating-btn {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: #000; color: #ffcc00; padding: 12px 24px; border-radius: 30px;
+            font-weight: bold; font-size: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            z-index: 1500; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+            display: flex; align-items: center; gap: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="app-container">
+    <div id="header">
+        <div class="font-bold italic text-yellow-400 text-xl">DONKI AD <span class="text-white text-sm not-italic">MAP</span></div>
+        <a href="#" class="bg-white text-black text-xs px-3 py-1 rounded-full font-bold flex items-center gap-1">他ツール <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" /></svg></a>
+    </div>
+    <img id="header-banner" src="" alt="Header Banner">
+
+    <div id="search-panel">
+        <div class="flex justify-between items-center mb-2" onclick="toggleSearch()">
+            <div class="font-bold flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
+                検索・絞り込み
+            </div>
+            <svg id="search-chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 transition-transform"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+        </div>
+        <div id="search-contents" class="space-y-3 hidden">
+            <select class="w-full border rounded p-2 text-sm"><option>都道府県を選択</option></select>
+            <select class="w-full border rounded p-2 text-sm"><option>市区町村を選択</option></select>
+            <div class="flex gap-2 overflow-x-auto pb-1">
+                <span class="bg-gray-200 px-3 py-1 rounded-full text-xs whitespace-nowrap">MEGAドンキ</span>
+                <span class="bg-gray-200 px-3 py-1 rounded-full text-xs whitespace-nowrap">ピカソ</span>
+                <span class="bg-gray-200 px-3 py-1 rounded-full text-xs whitespace-nowrap">ドン・キホーテ</span>
+            </div>
+            <label class="flex items-center gap-2 text-sm">
+                <input type="checkbox" id="show-unavailable" checked> 掲載不可店舗も表示する
+            </label>
+        </div>
+    </div>
+
+    <div id="map-container">
+        <div id="map"></div>
+        <button id="floating-btn" onclick="openModal()">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            料金、詳細を見る
+        </button>
+    </div>
+
+    <!-- Bottom Modal for Products -->
+    <div id="bottom-modal">
+        <div class="modal-handle" onclick="closeModal()"></div>
+        <div class="modal-tabs" id="modal-tabs">
+            <!-- Tabs injected by JS -->
+        </div>
+        <div class="modal-content" id="modal-content">
+            <!-- Content injected by JS -->
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- Data Fetching (CSV) ---
+    const SHEET_ID = '1wo0qLk-eYag_tqp-kZwE6CpNdFACwPWTtFCroxHdk1s';
+    
+    async function fetchCSV(sheetName) {
+        const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+        try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+            const text = await res.text();
+            return parseCSV(text);
+        } catch (e) {
+            console.error(`Failed to fetch ${sheetName}:`, e);
+            return [];
+        }
+    }
+
+    function parseCSV(str) {
+        const arr = [];
+        let quote = false;
+        let row = 0, col = 0;
+        for (let c = 0; c < str.length; c++) {
+            let cc = str[c], nc = str[c+1];
+            arr[row] = arr[row] || [];
+            arr[row][col] = arr[row][col] || '';
+            if (cc == '"' && quote && nc == '"') { arr[row][col] += cc; ++c; continue; }
+            if (cc == '"') { quote = !quote; continue; }
+            if (cc == ',' && !quote) { ++col; continue; }
+            if (cc == '\r' && nc == '\n' && !quote) { ++row; col = 0; ++c; continue; }
+            if (cc == '\n' && !quote) { ++row; col = 0; continue; }
+            if (cc == '\r' && !quote) { ++row; col = 0; continue; }
+            arr[row][col] += cc;
+        }
+        return arr;
+    }
+
+    // --- State ---
+    let stores = [];
+    let products = [];
+    let map;
+    let markers = [];
+    let icons = {};
+
+    // Product short names for tabs
+    const productTabs = ['BOXティッシュ', 'ポスター', 'ゲート', 'ティッシュ手渡し', '店舗ジャック'];
+    let currentTabIndex = 0;
+
+    async function initApp() {
+        // Fetch data
+        const [coordsData, statusData, pricesData, iconData] = await Promise.all([
+            fetchCSV('店舗座標一覧'),
+            fetchCSV('開催状況集計'),
+            fetchCSV('Prices'),
+            fetchCSV('icon')
+        ]);
+
+        // Process Icons (A: Category, B: URL)
+        if(iconData && iconData.length > 1) {
+            for(let i=1; i<iconData.length; i++) {
+                if(iconData[i][0] && iconData[i][1]) {
+                    icons[iconData[i][0]] = L.icon({
+                        iconUrl: iconData[i][1],
+                        iconSize: [32, 32],
+                        iconAnchor: [16, 32],
+                        popupAnchor: [0, -32]
+                    });
+                }
+            }
+        }
+
+        // Process Products (Prices sheet)
+        // A: 商材名, B: 数量・期間, C: 料金, D: 増減額, E: POINT
+        if(pricesData && pricesData.length > 1) {
+            let currentProd = null;
+            for(let i=1; i<pricesData.length; i++) {
+                const row = pricesData[i];
+                if(!row[0]) continue;
+                if(!currentProd || currentProd.title !== row[0]) {
+                    currentProd = {
+                        title: row[0],
+                        point: row[4] || '',
+                        options: []
+                    };
+                    products.push(currentProd);
+                }
+                currentProd.options.push({
+                    label: row[1],
+                    price: row[2],
+                    note: row[3]
+                });
+            }
+        }
+
+        // Default products if empty (fallback)
+        if(products.length === 0) {
+            products = [
+                { title: 'ドンキAD CMボックスティッシュ販売', point: 'ドン・キホーテ店内にてオリジナルティッシュを販売していただく事が可能です！', options: [{label: '3,000個', price: '1,985,940円', note: '自社デザインの場合 -30,000円'}] },
+                { title: 'ドンキAD A1ポスター掲示（ADスペース）', point: '店舗内にてポスターを掲示致します。', options: [{label: '1ヶ月間', price: '40,000円', note: 'DMMにて作成の場合 +30,000円'}] },
+                { title: 'ドンキAD インパクトゲート', point: '店頭・店内にある防犯ゲートを広告スペースに', options: [{label: '2本', price: '130,000円', note: '自社デザインの場合 -30,000円'}] },
+                { title: 'ドンキAD レジでのポケットティッシュ手渡し', point: 'お会計時にお買い物されたお客様へお配りします。', options: [{label: '1,000個', price: '142,500円', note: '自社デザインの場合 -30,000円'}] },
+                { title: 'ドンキAD 店舗内装飾ジャック', point: '店舗内を広告で埋め尽くす店内ジャック。', options: [{label: '1ヶ月間', price: '都度確認', note: 'DMMにて作成の場合 +30,000円'}] }
+            ];
+        }
+
+        // Process Stores
+        const statusMap = {};
+        if(statusData && statusData.length > 1) {
+            for(let i=1; i<statusData.length; i++) {
+                const row = statusData[i];
+                if(row[2]) { // C列: 店名
+                    statusMap[row[2]] = {
+                        updatedAt: row[4] || '',
+                        poster: row[5] || 'ー',
+                        register: row[6] || 'ー',
+                        tissue: row[7] || 'ー',
+                        gate: row[9] || row[8] || 'ー',
+                        jack: row[10] || 'ー',
+                        unavailable: row[11] || ''
+                    };
+                }
+            }
+        }
+
+        if(coordsData && coordsData.length > 1) {
+            for(let i=1; i<coordsData.length; i++) {
+                const row = coordsData[i];
+                const name = row[0];
+                if(!name || !row[4] || !row[5]) continue;
+                
+                const stat = statusMap[name] || { updatedAt: '', poster: 'ー', register: 'ー', tissue: 'ー', gate: 'ー', jack: 'ー', unavailable: '' };
+                
+                stores.push({
+                    name: name,
+                    category: row[2] || '',
+                    lat: parseFloat(row[4]),
+                    lng: parseFloat(row[5]),
+                    updatedAt: stat.updatedAt,
+                    unavailable: stat.unavailable,
+                    records: {
+                        tissue: stat.tissue,
+                        poster: stat.poster,
+                        gate: stat.gate,
+                        register: stat.register,
+                        jack: stat.jack
+                    }
+                });
+            }
+        }
+
+        if(stores.length === 0) {
+            stores.push({
+                name: 'モック店舗 (取得失敗)', category: 'MEGAドンキ', lat: 35.6895, lng: 139.6917, updatedAt: '2024/11/06', unavailable: '',
+                records: { tissue: '◯', poster: '×', gate: 'ー', register: '◯', jack: 'ー' }
+            });
+        }
+
+        initMap();
+        initModal();
+    }
+
+    function initMap() {
+        map = L.map('map').setView([35.6895, 139.6917], 13);
+        // OpenStreetMapを利用（認証不要）
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        const bounds = [];
+        stores.forEach(store => {
+            const markerOptions = {};
+            if (icons[store.category]) {
+                markerOptions.icon = icons[store.category];
+            }
+            
+            const marker = L.marker([store.lat, store.lng], markerOptions).addTo(map);
+            bounds.push([store.lat, store.lng]);
+
+            let isUnavailable = store.unavailable !== '';
+            let dateText = store.updatedAt ? store.updatedAt : '未実施';
+            let noteText = store.updatedAt ? 
+                '※過去の実績であり、現在は状況が異なる場合があります。お問い合わせください。' : 
+                '※過去開催実績がないためお問い合わせください。';
+
+            let popupContent = `
+                <div class="popup-header">${store.name}</div>
+                <div class="popup-body">
+                    ${isUnavailable ? `
+                    <div class="unavailable-overlay">
+                        <div class="unavailable-stamp">掲載不可 (施設都合上)</div>
+                    </div>` : ''}
+                    
+                    <div class="status-row">
+                        <span class="text-gray-500">更新日</span>
+                        <span class="font-bold bg-gray-100 px-2 rounded">${dateText}</span>
+                    </div>
+                    
+                    <div class="mt-3 mb-1 text-xs font-bold text-gray-400">過去の広告実績</div>
+                    <div class="status-grid">
+                        <div class="status-item"><span>BOXティッシュ</span> <span>${store.records.tissue}</span></div>
+                        <div class="status-item"><span>A1ポスター掲示</span> <span>${store.records.poster}</span></div>
+                        <div class="status-item"><span>ゲート</span> <span>${store.records.gate}</span></div>
+                        <div class="status-item"><span>ティッシュ手渡し</span> <span>${store.records.register}</span></div>
+                        <div class="status-item"><span>店舗ジャック</span> <span>${store.records.jack}</span></div>
+                    </div>
+                    <div class="note">${noteText}</div>
+                </div>
+            `;
+            marker.bindPopup(popupContent);
+        });
+
+        if (bounds.length > 0) {
+            map.fitBounds(bounds, { padding: [50, 50] });
+        }
+    }
+
+    // --- Search Panel ---
+    let searchOpen = false;
+    function toggleSearch() {
+        searchOpen = !searchOpen;
+        const panel = document.getElementById('search-contents');
+        const chev = document.getElementById('search-chevron');
+        if(searchOpen) {
+            panel.classList.remove('hidden');
+            chev.style.transform = 'rotate(180deg)';
+        } else {
+            panel.classList.add('hidden');
+            chev.style.transform = 'rotate(0deg)';
+        }
+    }
+
+    // --- Modal ---
+    function initModal() {
+        const tabsContainer = document.getElementById('modal-tabs');
+        tabsContainer.innerHTML = '';
+        products.forEach((p, i) => {
+            const tabName = productTabs[i] || p.title.substring(0,6);
+            const tab = document.createElement('div');
+            tab.className = `modal-tab ${i === 0 ? 'active' : ''}`;
+            tab.innerText = tabName;
+            tab.onclick = () => selectTab(i);
+            tabsContainer.appendChild(tab);
+        });
+        renderModalContent(0);
+    }
+
+    function selectTab(index) {
+        currentTabIndex = index;
+        document.querySelectorAll('.modal-tab').forEach((t, i) => {
+            t.className = `modal-tab ${i === index ? 'active' : ''}`;
+        });
+        renderModalContent(index);
+    }
+
+    function renderModalContent(index) {
+        const prod = products[index];
+        if(!prod) return;
+
+        let optionsHtml = prod.options.map((opt, i) => `<option value="${i}">${opt.label}</option>`).join('');
+        
+        const content = document.getElementById('modal-content');
+        content.innerHTML = `
+            <h2 class="text-lg font-bold mb-4">${prod.title}</h2>
+            <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200 mb-4">
+                <span class="bg-yellow-400 text-xs font-bold px-2 py-1 rounded">POINT</span>
+                <p class="text-sm mt-2">${prod.point}</p>
+            </div>
+            
+            <div class="border rounded-lg p-4">
+                <label class="text-xs text-gray-500 font-bold mb-1 block">数量・期間を選択</label>
+                <select id="lot-select" class="w-full border rounded p-2 mb-4 text-base" onchange="updatePrice(${index}, this.value)">
+                    ${optionsHtml}
+                </select>
+                
+                <div class="bg-gray-50 p-4 rounded">
+                    <div class="text-xs text-gray-500 font-bold mb-1">料金</div>
+                    <div class="text-3xl font-bold mb-2" id="price-display">${prod.options[0].price}</div>
+                    <div class="text-xs text-red-500 font-bold" id="note-display">${prod.options[0].note}</div>
+                </div>
+            </div>
+        `;
+    }
+
+    window.updatePrice = function(prodIndex, optIndex) {
+        const opt = products[prodIndex].options[optIndex];
+        document.getElementById('price-display').innerText = opt.price;
+        document.getElementById('note-display').innerText = opt.note;
+    }
+
+    function openModal() { document.getElementById('bottom-modal').classList.add('open'); }
+    function closeModal() { document.getElementById('bottom-modal').classList.remove('open'); }
+
+    // Bootstrap
+    window.onload = initApp;
+</script>
+</body>
+</html>
