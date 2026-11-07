@@ -348,6 +348,18 @@ function initSearchUI() {
             });
         }
         renderCategoryButtons();
+
+        // 検索条件を初期状態に戻す(距離・都道府県・市区町村・カテゴリ・掲載不可表示)
+        window.resetFilters = function() {
+            const rad = document.getElementById('radius-input'); if(rad) rad.value = '';
+            const pSel = document.getElementById('pref-select'); if(pSel) pSel.value = '';
+            updateCities(); // 市区町村の選択肢も空に戻す
+            const unav = document.getElementById('show-unavailable'); if(unav) unav.checked = true;
+            activeCategories = [...cats];
+            renderCategoryButtons();
+            catCont.scrollLeft = 0;
+            filterMap();
+        };
     }
 }
 
