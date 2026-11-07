@@ -323,7 +323,7 @@ function initSearchUI() {
     if(catCont) {
         catCont.innerHTML = '';
         const allBtn = document.createElement('span'); 
-        allBtn.className = 'bg-blue-100 border border-blue-300 text-blue-700 px-4 py-1.5 rounded-full text-xs whitespace-nowrap cursor-pointer font-bold flex-shrink-0'; 
+        allBtn.className = 'cat-all'; 
         allBtn.textContent = 'すべて選択';
         allBtn.onclick = () => { activeCategories = [...cats]; renderCategoryButtons(); filterMap(); };
         catCont.appendChild(allBtn);
@@ -333,11 +333,7 @@ function initSearchUI() {
             cats.forEach(cat => {
                 const span = document.createElement('span'); 
                 const isActive = activeCategories.includes(cat);
-                if(isActive) {
-                    span.className = 'bg-yellow-400 border border-yellow-400 px-4 py-1.5 rounded-full text-xs whitespace-nowrap cursor-pointer text-gray-800 font-bold flex-shrink-0';
-                } else {
-                    span.className = 'bg-gray-100 border border-gray-200 px-4 py-1.5 rounded-full text-xs whitespace-nowrap cursor-pointer text-gray-400 flex-shrink-0';
-                }
+                span.className = isActive ? 'cat-chip active' : 'cat-chip';
                 span.textContent = cat;
                 span.onclick = () => {
                     if(isActive) { activeCategories = activeCategories.filter(c => c !== cat); } 
@@ -349,16 +345,19 @@ function initSearchUI() {
         }
         renderCategoryButtons();
 
-        // 検索条件を初期状態に戻す(距離・都道府県・市区町村・カテゴリ・掲載不可表示)
+        // 検索条件を初期状態に戻す(距離・都道府県・市区町村・カテゴリ・掲載不可表示・地図位置)
         window.resetFilters = function() {
             const rad = document.getElementById('radius-input'); if(rad) rad.value = '';
             const pSel = document.getElementById('pref-select'); if(pSel) pSel.value = '';
             updateCities(); // 市区町村の選択肢も空に戻す
             const unav = document.getElementById('show-unavailable'); if(unav) unav.checked = true;
+            appliedFilter = { radius: '', pref: '', city: '' };
             activeCategories = [...cats];
             renderCategoryButtons();
             catCont.scrollLeft = 0;
             filterMap();
+            // 地図を初期表示に戻す(現在地があれば現在地、なければ全店舗が入る範囲)
+            if(userLat && userLng) { map.setView([userLat, userLng], 10); } else { fitStores(stores); }
         };
     }
 }
@@ -374,19 +373,57 @@ window.updateCities = function() {
     }
 }
 
+// 「決定」ボタンで確定した検索条件(距離・都道府県・市区町村)
+let appliedFilter = { radius: '', pref: '', city: '' };
+let noticeTimer = null;
+
+// 一時的なお知らせを上部に3.5秒だけ表示
+function showNotice(msg) {
+    const eb = document.getElementById('error-banner'); if(!eb) return;
+    eb.innerText = msg; eb.style.display = 'block';
+    clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => { eb.style.display = 'none'; }, 3500);
+}
+
+// 指定した店舗がすべて入る範囲に地図を動かす
+function fitStores(list, extraPoint) {
+    const pts = list.filter(s => !isNaN(s.lat) && !isNaN(s.lng)).map(s => [s.lat, s.lng]);
+    if(extraPoint) pts.push(extraPoint);
+    if(pts.length > 0) map.fitBounds(pts, { padding: [50, 50], maxZoom: 15 });
+}
+
+// 決定ボタン: 入力された条件を確定して、ピンの絞り込みと地図の移動を行う
+window.applySearch = function() {
+    const rad = (document.getElementById('radius-input')?.value || '').trim();
+    const pref = document.getElementById('pref-select')?.value || '';
+    const city = document.getElementById('city-select')?.value || '';
+
+    if(rad && !(userLat && userLng)) {
+        showNotice('現在地を取得できていないため、距離では絞り込めません');
+        return;
+    }
+    appliedFilter = { radius: rad, pref: pref, city: city };
+    filterMap();
+
+    // 絞り込み後に表示されている店舗へ地図を移動
+    const visible = stores.filter(s => s.marker && map.hasLayer(s.marker));
+    if(visible.length === 0) { showNotice('条件に合う店舗がありません'); return; }
+    fitStores(visible, rad ? [userLat, userLng] : null);
+
+    if(searchOpen) toggleSearch(); // 検索パネルを閉じて地図を見やすくする
+};
+
 window.filterMap = function() {
-    const elPref = document.getElementById('pref-select'); const sPref = elPref ? elPref.value : '';
-    const elCity = document.getElementById('city-select'); const sCity = elCity ? elCity.value : '';
+    const sPref = appliedFilter.pref, sCity = appliedFilter.city, rVal = appliedFilter.radius;
     const elUnav = document.getElementById('show-unavailable'); const sUnav = elUnav ? elUnav.checked : true;
-    const elRad = document.getElementById('radius-input'); const rVal = elRad ? elRad.value : '';
-    
+
     stores.forEach(s => {
         if(!s.marker) return; let v = true;
         if(sPref && s.pref !== sPref) v = false; if(sCity && s.city !== sCity) v = false;
         if(!activeCategories.includes(s.category)) v = false;
         if(!sUnav && s.unavailable !== '') v = false;
         if(rVal && userLat && userLng) { if(getDistance(userLat, userLng, s.lat, s.lng) > parseFloat(rVal)) v = false; }
-        
+
         if(v) { if(!map.hasLayer(s.marker)) s.marker.addTo(map); } else { if(map.hasLayer(s.marker)) map.removeLayer(s.marker); }
     });
 }
