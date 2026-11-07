@@ -59,6 +59,21 @@ function getShortTabName(title) {
     return title.substring(0, 6);
 }
 
+// 【重要修正】画像パスを確実にGitHub Pages用に補正する関数
+function fixImageUrl(url) {
+    if (!url) return '';
+    const cleanUrl = url.trim();
+    // すでに絶対URL（http~）の場合はそのまま
+    if (cleanUrl.startsWith('http')) return cleanUrl;
+    // 「images/pin...」のようにスラッシュ無しで始まっている場合、補正する
+    // ※現在のリポジトリのルートに対する絶対パスに変換
+    if (!cleanUrl.startsWith('/')) {
+        // GitHub PagesのURL構造（/donkiAD/）に合わせて補正
+        return `/donkiAD/${cleanUrl}`;
+    }
+    return cleanUrl;
+}
+
 let stores = [], products = [], map, icons = {}, activeCategories = [], userLat = null, userLng = null, userMarker = null;
 
 async function initApp() {
@@ -72,16 +87,38 @@ async function initApp() {
             const bannerUrl = bannerData[1][0]; const bannerLink = bannerData[1][1];
             if(bannerUrl) { const img = document.getElementById('header-banner'); if(img){ img.src = bannerUrl; img.style.display = 'block'; if(bannerLink) img.onclick = () => window.open(bannerLink, '_blank'); } }
         }
+        
+        // --- Icon（画像パス補正） ---
+        let defaultIconUrl = '';
         if(iconData && iconData.length > 1) {
-            for(let i=1; i<iconData.length; i++) { if(iconData[i][0] && iconData[i][1]) icons[iconData[i][0]] = L.icon({ iconUrl: iconData[i][1], iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32] }); }
+            for(let i=1; i<iconData.length; i++) { 
+                if(iconData[i][0] && iconData[i][1]) {
+                    const catName = iconData[i][0].trim();
+                    const fixedUrl = fixImageUrl(iconData[i][1]);
+                    
+                    icons[catName] = L.icon({ 
+                        iconUrl: fixedUrl, 
+                        iconSize: [32, 32], 
+                        iconAnchor: [16, 32], 
+                        popupAnchor: [0, -32] 
+                    });
+                    
+                    // 「専門店」の画像URLを、見知らぬカテゴリ用のデフォルトアイコンとして保持
+                    if (catName === '専門店') {
+                        defaultIconUrl = fixedUrl;
+                    }
+                } 
+            }
         }
 
+        // --- Prices ---
         if(pricesData && pricesData.length > 0) {
             let pHead = pricesData[0];
             let startIdx = 1;
             for(let i=0; i<Math.min(5, pricesData.length); i++) {
                 if(pricesData[i].join('').includes('商材名')) { pHead = pricesData[i]; startIdx = i + 1; break; }
             }
+
             const pTitle = getColIndex(pHead, ['商材名']) !== -1 ? getColIndex(pHead, ['商材名']) : 0;
             const pOpt = getColIndex(pHead, ['数量']) !== -1 ? getColIndex(pHead, ['数量']) : 1;
             const pPrice = getColIndex(pHead, ['料金']) !== -1 ? getColIndex(pHead, ['料金']) : 2;
@@ -94,7 +131,12 @@ async function initApp() {
                 const row = pricesData[i];
                 if(!row || !row[pTitle]) continue;
                 if(!currentProd || currentProd.title !== row[pTitle]) {
-                    currentProd = { title: row[pTitle], point: (row[pPoint] || ''), imageUrl: (row[pImg] || ''), options: [] };
+                    currentProd = { 
+                        title: row[pTitle], 
+                        point: (row[pPoint] || ''), 
+                        imageUrl: fixImageUrl(row[pImg]), // 画像パス補正
+                        options: [] 
+                    };
                     products.push(currentProd);
                 }
                 currentProd.options.push({ label: (row[pOpt] || ''), price: (row[pPrice] || ''), note: (row[pNote] || '') });
@@ -151,8 +193,20 @@ async function initApp() {
                 const stat = statusMap[addr] || { updatedAt: '', poster: 'ー', register: 'ー', tissue: 'ー', gate: 'ー', jack: 'ー', unavailable: '' };
                 const locInfo = extractPrefAndCity(addr);
 
+                let cat = cCatCol !== -1 ? row[cCatCol] : '';
+                
+                // 【重要修正】iconシートに存在しないカテゴリ（キラキラドンキなど）は、強制的に「専門店」と同じアイコンを適用する
+                if (cat && !icons[cat] && defaultIconUrl !== '') {
+                    icons[cat] = L.icon({ 
+                        iconUrl: defaultIconUrl, 
+                        iconSize: [32, 32], 
+                        iconAnchor: [16, 32], 
+                        popupAnchor: [0, -32] 
+                    });
+                }
+
                 stores.push({
-                    name: cNameCol !== -1 ? row[cNameCol] : '', category: cCatCol !== -1 ? row[cCatCol] : '',
+                    name: cNameCol !== -1 ? row[cNameCol] : '', category: cat,
                     pref: locInfo.pref, city: locInfo.city, lat: parseFloat(row[cLatCol]), lng: parseFloat(row[cLngCol]),
                     updatedAt: stat.updatedAt, unavailable: stat.unavailable,
                     records: { tissue: stat.tissue, poster: stat.poster, gate: stat.gate, register: stat.register, jack: stat.jack }, marker: null
@@ -162,8 +216,6 @@ async function initApp() {
         
         initMap(); 
         initSearchUI();
-        
-        // 【重要】前回消してしまった料金タブの初期化処理を復活
         initModal();
 
         getUserLocation(true);
@@ -205,7 +257,9 @@ function initMap() {
 }
 
 function getUserLocation(isInit = false) {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) { 
+        if(!isInit) alert("ブラウザが位置情報に未対応です。"); return; 
+    }
     navigator.geolocation.getCurrentPosition(
         (pos) => {
             userLat = pos.coords.latitude; userLng = pos.coords.longitude;
