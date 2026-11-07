@@ -125,7 +125,8 @@ async function initApp() {
             }
         }
         
-        initMap(); initModal(); initSearchUI();
+        initMap(); initSearchUI();
+        // 起動時に現在地取得（絞り込みはしない）
         getUserLocation(true);
 
     } catch(err) { console.error(err); showError("⚠️ システムエラーが発生しました。"); }
@@ -176,11 +177,9 @@ function getUserLocation(isInit = false) {
             const userIcon = L.divIcon({ className: 'custom-user-marker', html: '<div class="user-pulse"></div>', iconSize: [20, 20], iconAnchor: [10, 10] });
             userMarker = L.marker([userLat, userLng], {icon: userIcon}).addTo(map).bindPopup("<b style='font-size:12px;'>現在地</b>");
             
-            if(isInit) {
-                map.setView([userLat, userLng], 10); 
-            } else {
-                map.setView([userLat, userLng], 12); 
-            }
+            map.setView([userLat, userLng], 12); 
+            // 起動時は入力フォームに数字を入れない（絞り込まない）
+            if(!isInit) filterMap();
         }, 
         (err) => { 
             if(!isInit) alert("位置取得に失敗しました。スマホの設定をご確認ください。"); 
@@ -204,15 +203,50 @@ function initSearchUI() {
     
     const catCont = document.getElementById('category-filters');
     const cats = [...new Set(stores.map(s => s.category).filter(Boolean))];
+    
+    // 【改善】初期状態を全選択にする
+    activeCategories = [...cats];
     if(catCont) {
-        cats.forEach(cat => {
-            const span = document.createElement('span'); span.className = 'bg-gray-100 border border-gray-200 px-4 py-1.5 rounded-full text-xs whitespace-nowrap cursor-pointer transition-colors'; span.textContent = cat;
-            span.onclick = () => {
-                if(activeCategories.includes(cat)) { activeCategories = activeCategories.filter(c => c !== cat); span.classList.replace('bg-yellow-400', 'bg-gray-100'); span.classList.remove('font-bold', 'border-yellow-400'); } 
-                else { activeCategories.push(cat); span.classList.replace('bg-gray-100', 'bg-yellow-400'); span.classList.add('font-bold', 'border-yellow-400'); }
-                filterMap();
-            }; catCont.appendChild(span);
-        });
+        catCont.innerHTML = '';
+        
+        // 「すべて選択」リセットボタン
+        const allBtn = document.createElement('span'); 
+        allBtn.className = 'bg-blue-100 border border-blue-300 text-blue-700 px-4 py-1.5 rounded-full text-xs whitespace-nowrap cursor-pointer font-bold flex-shrink-0'; 
+        allBtn.textContent = 'すべて選択';
+        allBtn.onclick = () => {
+            activeCategories = [...cats];
+            renderCategoryButtons();
+            filterMap();
+        };
+        catCont.appendChild(allBtn);
+
+        function renderCategoryButtons() {
+            while (catCont.childNodes.length > 1) { catCont.removeChild(catCont.lastChild); }
+            cats.forEach(cat => {
+                const span = document.createElement('span'); 
+                const isActive = activeCategories.includes(cat);
+                
+                // 色付き(ON)かグレーアウト(OFF)かの切り替え
+                if(isActive) {
+                    span.className = 'bg-yellow-400 border border-yellow-400 px-4 py-1.5 rounded-full text-xs whitespace-nowrap cursor-pointer text-gray-800 font-bold flex-shrink-0';
+                } else {
+                    span.className = 'bg-gray-100 border border-gray-200 px-4 py-1.5 rounded-full text-xs whitespace-nowrap cursor-pointer text-gray-400 flex-shrink-0';
+                }
+                
+                span.textContent = cat;
+                span.onclick = () => {
+                    if(isActive) {
+                        activeCategories = activeCategories.filter(c => c !== cat); // 選択解除(非表示)
+                    } else {
+                        activeCategories.push(cat); // 選択(表示)
+                    }
+                    renderCategoryButtons();
+                    filterMap();
+                }; 
+                catCont.appendChild(span);
+            });
+        }
+        renderCategoryButtons();
     }
 }
 
@@ -228,7 +262,6 @@ window.updateCities = function() {
 }
 
 window.filterMap = function() {
-    // 要素が見つからなくてもエラーにしないための安全取得
     const elPref = document.getElementById('pref-select'); const sPref = elPref ? elPref.value : '';
     const elCity = document.getElementById('city-select'); const sCity = elCity ? elCity.value : '';
     const elUnav = document.getElementById('show-unavailable'); const sUnav = elUnav ? elUnav.checked : true;
@@ -237,7 +270,10 @@ window.filterMap = function() {
     stores.forEach(s => {
         if(!s.marker) return; let v = true;
         if(sPref && s.pref !== sPref) v = false; if(sCity && s.city !== sCity) v = false;
-        if(activeCategories.length > 0 && !activeCategories.includes(s.category)) v = false;
+        
+        // 【改善】選択されていないカテゴリは非表示にする
+        if(!activeCategories.includes(s.category)) v = false;
+        
         if(!sUnav && s.unavailable !== '') v = false;
         
         if(rVal && userLat && userLng) { 
