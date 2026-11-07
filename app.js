@@ -59,17 +59,17 @@ function getShortTabName(title) {
     return title.substring(0, 6);
 }
 
-// 【完全修正】リポジトリ名等の自動判定を捨て、最も安全な相対パス（./images/）を返す
+// 【究極の修正】スプレッドシートの書き方に関わらず、確実にお客様のGitHub Pagesの画像URLを組み立てる
 function getSafeImageUrl(url) {
     if (!url) return '';
     let cleanUrl = url.trim();
     if (cleanUrl.startsWith('http')) return cleanUrl;
     
-    // 先頭のスラッシュ等を削り、純粋な相対パスにする
-    cleanUrl = cleanUrl.replace(/^[\.\/]+/, '');
+    // スプシに「images/pin.png」と書いてあっても「pin.png」でも、ファイル名だけを強制抽出
+    const fileName = cleanUrl.split('/').pop();
     
-    // 先頭に強制的に ./ をつけて、必ずindex.htmlと同じ階層から探しにいく
-    return `./${cleanUrl}`;
+    // お客様のリポジトリ（donki-AD）の絶対URLに直接つなぐ（リンク切れを物理的に防ぐ）
+    return `https://pachi-town.github.io/donki-AD/images/${fileName}`;
 }
 
 let stores = [], products = [], map, icons = {}, activeCategories = [], userLat = null, userLng = null, userMarker = null;
@@ -102,16 +102,11 @@ async function initApp() {
                     });
                     
                     icons[catName] = iconObj;
-                    
-                    if (catName === '専門店') {
-                        defaultIconObj = iconObj;
-                    }
+                    if (catName === '専門店') { defaultIconObj = iconObj; }
                 } 
             }
         }
-        if (!defaultIconObj && Object.keys(icons).length > 0) {
-            defaultIconObj = icons[Object.keys(icons)[0]];
-        }
+        if (!defaultIconObj && Object.keys(icons).length > 0) { defaultIconObj = icons[Object.keys(icons)[0]]; }
 
         // --- Prices ---
         if(pricesData && pricesData.length > 0) {
@@ -133,12 +128,7 @@ async function initApp() {
                 const row = pricesData[i];
                 if(!row || !row[pTitle]) continue;
                 if(!currentProd || currentProd.title !== row[pTitle]) {
-                    currentProd = { 
-                        title: row[pTitle], 
-                        point: (row[pPoint] || ''), 
-                        imageUrl: getSafeImageUrl(row[pImg]), 
-                        options: [] 
-                    };
+                    currentProd = { title: row[pTitle], point: (row[pPoint] || ''), imageUrl: getSafeImageUrl(row[pImg]), options: [] };
                     products.push(currentProd);
                 }
                 currentProd.options.push({ label: (row[pOpt] || ''), price: (row[pPrice] || ''), note: (row[pNote] || '') });
@@ -197,7 +187,7 @@ async function initApp() {
 
                 let cat = cCatCol !== -1 ? row[cCatCol] : '';
                 
-                // 【追加】iconシートに存在しないカテゴリは、データを格納する時点で強制的に「専門店」に変更し、漏れを完全に防ぐ
+                // 【追加】iconシートに存在しないカテゴリ（キラキラドンキ等）は、表示上も内部的にも強制的に「専門店」に集約させる
                 if (cat && !icons[cat]) {
                     cat = '専門店';
                 }
@@ -377,7 +367,6 @@ function renderModalContent(index) {
     let optsHtml = prod.options.map((opt, i) => `<option value="${i}">${opt.label}</option>`).join('');
     const content = document.getElementById('modal-content'); if(!content) return;
     
-    // 【追加】画像読み込みエラー時に非表示にするonerror処理を強化
     content.innerHTML = `
         <h2 class="text-[17px] font-bold mb-4 leading-snug text-gray-800">${prod.title || ''}</h2>
         ${prod.imageUrl ? `<img src="${prod.imageUrl}" class="product-image" alt="Product Image" onerror="this.style.display='none'">` : ''}
