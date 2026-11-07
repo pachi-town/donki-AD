@@ -59,17 +59,14 @@ function getShortTabName(title) {
     return title.substring(0, 6);
 }
 
-// 【究極の修正】スプレッドシートの書き方に関わらず、確実にお客様のGitHub Pagesの画像URLを組み立てる
-function getSafeImageUrl(url) {
-    if (!url) return '';
-    let cleanUrl = url.trim();
-    if (cleanUrl.startsWith('http')) return cleanUrl;
-    
-    // スプシに「images/pin.png」と書いてあっても「pin.png」でも、ファイル名だけを強制抽出
-    const fileName = cleanUrl.split('/').pop();
-    
-    // お客様のリポジトリ（donki-AD）の絶対URLに直接つなぐ（リンク切れを物理的に防ぐ）
-    return `https://pachi-town.github.io/donki-AD/images/${fileName}`;
+// 【完全修正】余計なURL組み立てを捨て、スプレッドシートの記述をそのまま生かす最も確実な処理
+function resolveImageUrl(rawUrl) {
+    if (!rawUrl) return '';
+    let val = rawUrl.trim();
+    if (val.startsWith('http')) return val;
+    // スプレッドシートが "images/pin.png" なら "./images/pin.png" に補正するだけ
+    if (val.startsWith('images/')) return './' + val;
+    return val;
 }
 
 let stores = [], products = [], map, icons = {}, activeCategories = [], userLat = null, userLng = null, userMarker = null;
@@ -84,7 +81,7 @@ async function initApp() {
 
         if(bannerData && bannerData.length > 1) {
             const bannerUrl = bannerData[1][0]; const bannerLink = bannerData[1][1];
-            if(bannerUrl) { const img = document.getElementById('header-banner'); if(img){ img.src = getSafeImageUrl(bannerUrl); img.style.display = 'block'; if(bannerLink) img.onclick = () => window.open(bannerLink, '_blank'); } }
+            if(bannerUrl) { const img = document.getElementById('header-banner'); if(img){ img.src = resolveImageUrl(bannerUrl); img.style.display = 'block'; if(bannerLink) img.onclick = () => window.open(bannerLink, '_blank'); } }
         }
         
         // --- Icon ---
@@ -92,20 +89,22 @@ async function initApp() {
             for(let i=1; i<iconData.length; i++) { 
                 if(iconData[i][0] && iconData[i][1]) {
                     const catName = iconData[i][0].trim();
-                    const fixedUrl = getSafeImageUrl(iconData[i][1]);
+                    const finalUrl = resolveImageUrl(iconData[i][1]);
                     
                     const iconObj = L.icon({ 
-                        iconUrl: fixedUrl, 
+                        iconUrl: finalUrl, 
                         iconSize: [32, 32], 
                         iconAnchor: [16, 32], 
                         popupAnchor: [0, -32] 
                     });
                     
                     icons[catName] = iconObj;
+                    // 「専門店」を未知カテゴリの避難先に設定
                     if (catName === '専門店') { defaultIconObj = iconObj; }
                 } 
             }
         }
+        // もし「専門店」が無ければ、見つかった最初のアイコンを予備にする
         if (!defaultIconObj && Object.keys(icons).length > 0) { defaultIconObj = icons[Object.keys(icons)[0]]; }
 
         // --- Prices ---
@@ -128,7 +127,7 @@ async function initApp() {
                 const row = pricesData[i];
                 if(!row || !row[pTitle]) continue;
                 if(!currentProd || currentProd.title !== row[pTitle]) {
-                    currentProd = { title: row[pTitle], point: (row[pPoint] || ''), imageUrl: getSafeImageUrl(row[pImg]), options: [] };
+                    currentProd = { title: row[pTitle], point: (row[pPoint] || ''), imageUrl: resolveImageUrl(row[pImg]), options: [] };
                     products.push(currentProd);
                 }
                 currentProd.options.push({ label: (row[pOpt] || ''), price: (row[pPrice] || ''), note: (row[pNote] || '') });
@@ -137,8 +136,7 @@ async function initApp() {
 
         if(products.length === 0) {
             products = [
-                { title: 'CMボックスティッシュ販売', point: 'ドン・キホーテ店内にて販売可能です！', imageUrl: '', options: [{label: '1,008個', price: '934,270円', note: '自社デザインの場合 -30,000円'}] },
-                { title: 'ポスター掲示（A1サイズ）', point: '店舗内にてポスターを掲示致します。', imageUrl: '', options: [{label: '1ヶ月間', price: '40,000円', note: 'DMMにて作成の場合 +30,000円'}] }
+                { title: 'CMボックスティッシュ販売', point: 'ドン・キホーテ店内にて販売可能です！', imageUrl: '', options: [{label: '1,008個', price: '934,270円', note: '自社デザインの場合 -30,000円'}] }
             ];
         }
 
@@ -185,12 +183,8 @@ async function initApp() {
                 const stat = statusMap[addr] || { updatedAt: '', poster: 'ー', register: 'ー', tissue: 'ー', gate: 'ー', jack: 'ー', unavailable: '' };
                 const locInfo = extractPrefAndCity(addr);
 
-                let cat = cCatCol !== -1 ? row[cCatCol] : '';
-                
-                // 【追加】iconシートに存在しないカテゴリ（キラキラドンキ等）は、表示上も内部的にも強制的に「専門店」に集約させる
-                if (cat && !icons[cat]) {
-                    cat = '専門店';
-                }
+                // 【修正】カテゴリ名にスペースが混じっていても一致するよう厳密にトリミング
+                const cat = cCatCol !== -1 ? (row[cCatCol] || '').trim() : '';
 
                 stores.push({
                     name: cNameCol !== -1 ? row[cNameCol] : '', category: cat,
@@ -221,12 +215,12 @@ function initMap() {
     stores.forEach(store => {
         if(isNaN(store.lat) || isNaN(store.lng)) return;
         
-        let mOpt = {};
-        if (icons[store.category]) {
-            mOpt = { icon: icons[store.category] };
-        } else if (defaultIconObj) {
-            mOpt = { icon: defaultIconObj };
+        // 【完全修正】アイコンリストに無いカテゴリ（キラキラドンキ等）は確実にデフォルト（専門店）を割り当てる
+        let targetIcon = icons[store.category];
+        if (!targetIcon && defaultIconObj) {
+            targetIcon = defaultIconObj; 
         }
+        const mOpt = targetIcon ? { icon: targetIcon } : {};
 
         const marker = L.marker([store.lat, store.lng], mOpt).addTo(map);
         store.marker = marker; bounds.push([store.lat, store.lng]);
