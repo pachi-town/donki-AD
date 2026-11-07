@@ -2,11 +2,13 @@ const SHEET_ID = '1wo0qLk-eYag_tqp-kZwE6CpNdFACwPWTtFCroxHdk1s';
 const PREF_ORDER = ["北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県","茨城県","栃木県","群馬県","埼玉県","千葉県","東京都","神奈川県","新潟県","富山県","石川県","福井県","山梨県","長野県","岐阜県","静岡県","愛知県","三重県","滋賀県","京都府","大阪府","兵庫県","奈良県","和歌山県","鳥取県","島根県","岡山県","広島県","山口県","徳島県","香川県","愛媛県","高知県","福岡県","佐賀県","長崎県","熊本県","大分県","宮崎県","鹿児島県","沖縄県"];
 
 function showError(msg) { const eb = document.getElementById('error-banner'); if(eb){ eb.innerText = msg; eb.style.display = 'block'; } }
+
 async function fetchCSV(sheetName) {
     const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
     try { const res = await fetch(url); if (!res.ok) return []; const text = await res.text(); return parseCSV(text); } 
     catch (e) { return []; }
 }
+
 function parseCSV(str) {
     if(!str) return []; const arr = []; let quote = false; let row = 0, col = 0;
     for (let c = 0; c < str.length; c++) {
@@ -21,17 +23,20 @@ function parseCSV(str) {
     }
     return arr;
 }
+
 function getColIndex(headers, keywords) {
     if(!headers) return -1;
     for (let i = 0; i < headers.length; i++) { if (!headers[i]) continue; for (let kw of keywords) { if (headers[i].includes(kw)) return i; } }
     return -1;
 }
+
 function extractPrefAndCity(address) {
     if(!address) return { pref: '', city: '' };
     const regex = /^(東京都|北海道|(?:京都|大阪)府|.{2,3}県)([^市郡]+[市郡]|.*?区|.*?町|.*?村)/;
     const match = address.match(regex);
     if(match) return { pref: match[1], city: match[2] }; return { pref: '', city: '' };
 }
+
 function getDistance(lat1, lon1, lat2, lon2) {
     const R = 6371; const dLat = (lat2 - lat1) * Math.PI / 180; const dLon = (lon2 - lon1) * Math.PI / 180;
     const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
@@ -56,23 +61,46 @@ async function initApp() {
             for(let i=1; i<iconData.length; i++) { if(iconData[i][0] && iconData[i][1]) icons[iconData[i][0]] = L.icon({ iconUrl: iconData[i][1], iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32] }); }
         }
 
+        // --- Prices（強力な検索と安全網） ---
         if(pricesData && pricesData.length > 0) {
-            const pHead = pricesData[0];
-            const pTitle = getColIndex(pHead, ['商材名']); const pOpt = getColIndex(pHead, ['数量']); const pPrice = getColIndex(pHead, ['料金']);
-            const pNote = getColIndex(pHead, ['増減額']); const pPoint = getColIndex(pHead, ['POINT']); const pImg = getColIndex(pHead, ['画像URL']);
+            let pHead = pricesData[0];
+            let startIdx = 1;
+            // ヘッダー行が1行目でない場合を探す
+            for(let i=0; i<Math.min(5, pricesData.length); i++) {
+                if(pricesData[i].join('').includes('商材名')) { pHead = pricesData[i]; startIdx = i + 1; break; }
+            }
+
+            const pTitle = getColIndex(pHead, ['商材名']) !== -1 ? getColIndex(pHead, ['商材名']) : 0;
+            const pOpt = getColIndex(pHead, ['数量']) !== -1 ? getColIndex(pHead, ['数量']) : 1;
+            const pPrice = getColIndex(pHead, ['料金']) !== -1 ? getColIndex(pHead, ['料金']) : 2;
+            const pNote = getColIndex(pHead, ['増減額', 'デザイン']) !== -1 ? getColIndex(pHead, ['増減額', 'デザイン']) : 3;
+            const pPoint = getColIndex(pHead, ['POINT']) !== -1 ? getColIndex(pHead, ['POINT']) : 4;
+            const pImg = getColIndex(pHead, ['画像']) !== -1 ? getColIndex(pHead, ['画像']) : 5;
             
             let currentProd = null;
-            for(let i=1; i<pricesData.length; i++) {
+            for(let i=startIdx; i<pricesData.length; i++) {
                 const row = pricesData[i];
-                if(pTitle !== -1 && !row[pTitle]) continue;
-                if(!currentProd || (pTitle !== -1 && currentProd.title !== row[pTitle])) {
-                    currentProd = { title: row[pTitle], point: (pPoint !== -1 ? row[pPoint] : ''), imageUrl: (pImg !== -1 ? row[pImg] : ''), options: [] };
+                if(!row[pTitle]) continue;
+                if(!currentProd || currentProd.title !== row[pTitle]) {
+                    currentProd = { title: row[pTitle], point: (row[pPoint] || ''), imageUrl: (row[pImg] || ''), options: [] };
                     products.push(currentProd);
                 }
-                currentProd.options.push({ label: (pOpt !== -1 ? row[pOpt] : ''), price: (pPrice !== -1 ? row[pPrice] : ''), note: (pNote !== -1 ? row[pNote] : '') });
+                currentProd.options.push({ label: (row[pOpt] || ''), price: (row[pPrice] || ''), note: (row[pNote] || '') });
             }
         }
 
+        // もしデータが空になってしまった場合のフォールバック（真っ白防止策）
+        if(products.length === 0) {
+            products = [
+                { title: 'ドンキAD CMボックスティッシュ販売', point: 'ドン・キホーテ店内にてオリジナルティッシュを販売していただく事が可能です！', imageUrl: '', options: [{label: '1,008個', price: '934,270円', note: '自社デザインの場合 -30,000円'}] },
+                { title: 'ドンキAD ADスペース（ポスター掲示）', point: '店舗内にてポスターを掲示致します。', imageUrl: '', options: [{label: '1ヶ月間', price: '40,000円', note: 'DMMにて作成の場合 +30,000円'}] },
+                { title: 'ドンキAD インパクトゲート', point: '店頭・店内にある防犯ゲートを広告スペースに', imageUrl: '', options: [{label: '2本', price: '130,000円', note: '自社デザインの場合 -30,000円'}] },
+                { title: 'ドンキAD レジでのポケットティッシュ手渡し', point: 'お会計時にお買い物されたお客様へお配りします。', imageUrl: '', options: [{label: '1,000個', price: '142,500円', note: '自社デザインの場合 -30,000円'}] },
+                { title: 'ドンキAD 店舗内装飾ジャック', point: '店舗内を広告で埋め尽くす店内ジャック。', imageUrl: '', options: [{label: '1ヶ月間', price: '都度確認', note: 'DMMにて作成の場合 +30,000円'}] }
+            ];
+        }
+
+        // --- Status ---
         const statusMap = {};
         if(statusData && statusData.length > 0) {
             const stHead = statusData[0];
@@ -103,6 +131,7 @@ async function initApp() {
             }
         }
 
+        // --- Coords ---
         if(coordsData && coordsData.length > 0) {
             const coHead = coordsData[0];
             const cNameCol = getColIndex(coHead, ['店舗名']); const cCatCol = getColIndex(coHead, ['カテゴリ']);
@@ -126,7 +155,6 @@ async function initApp() {
         }
         
         initMap(); initSearchUI();
-        // 起動時に現在地取得（絞り込みはしない）
         getUserLocation(true);
 
     } catch(err) { console.error(err); showError("⚠️ システムエラーが発生しました。"); }
@@ -177,22 +205,14 @@ function getUserLocation(isInit = false) {
             const userIcon = L.divIcon({ className: 'custom-user-marker', html: '<div class="user-pulse"></div>', iconSize: [20, 20], iconAnchor: [10, 10] });
             userMarker = L.marker([userLat, userLng], {icon: userIcon}).addTo(map).bindPopup("<b style='font-size:12px;'>現在地</b>");
             
-            map.setView([userLat, userLng], 12); 
-            // 起動時は入力フォームに数字を入れない（絞り込まない）
-            if(!isInit) filterMap();
+            if(isInit) { map.setView([userLat, userLng], 10); } else { map.setView([userLat, userLng], 12); }
         }, 
-        (err) => { 
-            if(!isInit) alert("位置取得に失敗しました。スマホの設定をご確認ください。"); 
-        }
+        (err) => { if(!isInit) alert("位置取得に失敗しました。スマホの設定をご確認ください。"); }
     );
 }
 
 window.recenterMap = function() {
-    if(userLat && userLng) {
-        map.setView([userLat, userLng], 12);
-    } else {
-        getUserLocation(false);
-    }
+    if(userLat && userLng) { map.setView([userLat, userLng], 12); } else { getUserLocation(false); }
 }
 
 function initSearchUI() {
@@ -204,20 +224,13 @@ function initSearchUI() {
     const catCont = document.getElementById('category-filters');
     const cats = [...new Set(stores.map(s => s.category).filter(Boolean))];
     
-    // 【改善】初期状態を全選択にする
     activeCategories = [...cats];
     if(catCont) {
         catCont.innerHTML = '';
-        
-        // 「すべて選択」リセットボタン
         const allBtn = document.createElement('span'); 
         allBtn.className = 'bg-blue-100 border border-blue-300 text-blue-700 px-4 py-1.5 rounded-full text-xs whitespace-nowrap cursor-pointer font-bold flex-shrink-0'; 
         allBtn.textContent = 'すべて選択';
-        allBtn.onclick = () => {
-            activeCategories = [...cats];
-            renderCategoryButtons();
-            filterMap();
-        };
+        allBtn.onclick = () => { activeCategories = [...cats]; renderCategoryButtons(); filterMap(); };
         catCont.appendChild(allBtn);
 
         function renderCategoryButtons() {
@@ -225,23 +238,16 @@ function initSearchUI() {
             cats.forEach(cat => {
                 const span = document.createElement('span'); 
                 const isActive = activeCategories.includes(cat);
-                
-                // 色付き(ON)かグレーアウト(OFF)かの切り替え
                 if(isActive) {
                     span.className = 'bg-yellow-400 border border-yellow-400 px-4 py-1.5 rounded-full text-xs whitespace-nowrap cursor-pointer text-gray-800 font-bold flex-shrink-0';
                 } else {
                     span.className = 'bg-gray-100 border border-gray-200 px-4 py-1.5 rounded-full text-xs whitespace-nowrap cursor-pointer text-gray-400 flex-shrink-0';
                 }
-                
                 span.textContent = cat;
                 span.onclick = () => {
-                    if(isActive) {
-                        activeCategories = activeCategories.filter(c => c !== cat); // 選択解除(非表示)
-                    } else {
-                        activeCategories.push(cat); // 選択(表示)
-                    }
-                    renderCategoryButtons();
-                    filterMap();
+                    if(isActive) { activeCategories = activeCategories.filter(c => c !== cat); } 
+                    else { activeCategories.push(cat); }
+                    renderCategoryButtons(); filterMap();
                 }; 
                 catCont.appendChild(span);
             });
@@ -270,15 +276,9 @@ window.filterMap = function() {
     stores.forEach(s => {
         if(!s.marker) return; let v = true;
         if(sPref && s.pref !== sPref) v = false; if(sCity && s.city !== sCity) v = false;
-        
-        // 【改善】選択されていないカテゴリは非表示にする
         if(!activeCategories.includes(s.category)) v = false;
-        
         if(!sUnav && s.unavailable !== '') v = false;
-        
-        if(rVal && userLat && userLng) { 
-            if(getDistance(userLat, userLng, s.lat, s.lng) > parseFloat(rVal)) v = false; 
-        }
+        if(rVal && userLat && userLng) { if(getDistance(userLat, userLng, s.lat, s.lng) > parseFloat(rVal)) v = false; }
         
         if(v) { if(!map.hasLayer(s.marker)) s.marker.addTo(map); } else { if(map.hasLayer(s.marker)) map.removeLayer(s.marker); }
     });
