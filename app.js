@@ -1,4 +1,16 @@
 const SHEET_ID = '1wo0qLk-eYag_tqp-kZwE6CpNdFACwPWTtFCroxHdk1s';
+
+// 日本地図の正しい並び順（JIS X 0401）
+const PREF_ORDER = [
+    "北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県", 
+    "茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県", 
+    "新潟県", "富山県", "石川県", "福井県", "山梨県", "長野県", "岐阜県", 
+    "静岡県", "愛知県", "三重県", "滋賀県", "京都府", "大阪府", "兵庫県", 
+    "奈良県", "和歌山県", "鳥取県", "島根県", "岡山県", "広島県", "山口県", 
+    "徳島県", "香川県", "愛媛県", "高知県", "福岡県", "佐賀県", "長崎県", 
+    "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県"
+];
+
 function showError(msg) { const eb = document.getElementById('error-banner'); eb.innerText = msg; eb.style.display = 'block'; }
 async function fetchCSV(sheetName) {
     const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
@@ -125,13 +137,26 @@ async function initApp() {
                 });
             }
         }
-        initMap(); initModal(); initSearchUI();
+        
+        initMap(); 
+        initModal(); 
+        initSearchUI();
+
+        // 【追加】起動時に自動で現在地取得を開始
+        getUserLocation(true);
+
     } catch(err) { console.error(err); showError("⚠️ システムエラーが発生しました。"); }
 }
 
 function initMap() {
-    map = L.map('map').setView([35.6895, 139.6917], 5);
+    // tap:false を設定してスマホでのダブルタップズームや操作のラグを解消
+    map = L.map('map', { doubleClickZoom: true, tap: false }).setView([35.6895, 139.6917], 5);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
+    
+    // 【追加】地図を触ったら検索パネルを閉じる
+    map.on('click', () => { if(searchOpen) toggleSearch(); });
+    map.on('dragstart', () => { if(searchOpen) toggleSearch(); });
+
     const bounds = [];
     stores.forEach(store => {
         if(isNaN(store.lat) || isNaN(store.lng)) return;
@@ -158,38 +183,46 @@ function initMap() {
     if(bounds.length > 0) map.fitBounds(bounds, { padding: [50, 50] });
 }
 
-function getUserLocation() {
-    if (!navigator.geolocation) { alert("ブラウザが位置情報に未対応です。"); return; }
+// 引数(isAuto)を追加。自動取得の場合はエラーアラートを出さない。
+function getUserLocation(isAuto = false) {
+    if (!navigator.geolocation) { 
+        if(!isAuto) alert("ブラウザが位置情報に未対応です。"); return; 
+    }
     navigator.geolocation.getCurrentPosition(
         (pos) => {
             userLat = pos.coords.latitude; userLng = pos.coords.longitude;
             if(userMarker) map.removeLayer(userMarker);
             
-            // 現在地用の専用アイコン（パルスアニメーション）
-            const userIcon = L.divIcon({
-                className: 'custom-user-marker',
-                html: '<div class="user-pulse"></div>',
-                iconSize: [20, 20],
-                iconAnchor: [10, 10]
-            });
-
+            const userIcon = L.divIcon({ className: 'custom-user-marker', html: '<div class="user-pulse"></div>', iconSize: [20, 20], iconAnchor: [10, 10] });
             userMarker = L.marker([userLat, userLng], {icon: userIcon}).addTo(map).bindPopup("<b style='font-size:12px;'>現在地</b>");
+            
             map.setView([userLat, userLng], 12); 
             
-            // 距離指定が空の場合のみ、自動的に10kmをセットする
+            // 成功したら「現在地から」ボタンを消す
+            document.getElementById('btn-geolocation').style.display = 'none';
+
             const radiusSelect = document.getElementById('radius-select');
-            if (radiusSelect.value === "") {
-                radiusSelect.value = "10"; 
-            }
+            if (radiusSelect.value === "") radiusSelect.value = "10"; 
             filterMap();
-        }, () => { alert("位置取得に失敗しました。スマホの位置情報設定をご確認ください。"); }
+        }, 
+        (err) => { 
+            if(!isAuto) alert("位置取得に失敗しました。スマホの設定をご確認ください。"); 
+        }
     );
 }
 
 function initSearchUI() {
-    const prefs = [...new Set(stores.map(s => s.pref).filter(Boolean))].sort();
+    // 【追加】都道府県をJIS規格順にソート
+    const rawPrefs = [...new Set(stores.map(s => s.pref).filter(Boolean))];
+    rawPrefs.sort((a, b) => {
+        let ia = PREF_ORDER.indexOf(a); let ib = PREF_ORDER.indexOf(b);
+        if(ia === -1) ia = 999; if(ib === -1) ib = 999;
+        return ia - ib;
+    });
+
     const pSel = document.getElementById('pref-select');
-    prefs.forEach(p => { const opt = document.createElement('option'); opt.value = p; opt.textContent = p; pSel.appendChild(opt); });
+    rawPrefs.forEach(p => { const opt = document.createElement('option'); opt.value = p; opt.textContent = p; pSel.appendChild(opt); });
+    
     const catCont = document.getElementById('category-filters');
     const cats = [...new Set(stores.map(s => s.category).filter(Boolean))];
     cats.forEach(cat => {
@@ -205,7 +238,9 @@ function initSearchUI() {
 window.updateCities = function() {
     const sPref = document.getElementById('pref-select').value; const cSel = document.getElementById('city-select'); cSel.innerHTML = '<option value="">市区町村を選択</option>';
     if(sPref) {
-        const cities = [...new Set(stores.filter(s => s.pref === sPref).map(s => s.city).filter(Boolean))].sort();
+        // 【追加】市区町村をあいうえお順にソート
+        const cities = [...new Set(stores.filter(s => s.pref === sPref).map(s => s.city).filter(Boolean))];
+        cities.sort((a, b) => a.localeCompare(b, 'ja'));
         cities.forEach(c => { const opt = document.createElement('option'); opt.value = c; opt.textContent = c; cSel.appendChild(opt); });
     }
 }
@@ -245,14 +280,16 @@ function renderModalContent(index) {
     const prod = products[index]; if(!prod) return;
     let optsHtml = prod.options.map((opt, i) => `<option value="${i}">${opt.label}</option>`).join('');
     const content = document.getElementById('modal-content');
+    
+    // 【追加】タイトルが長い場合の折り返し（leading-snug等）を調整
     content.innerHTML = `
-        <h2 class="text-lg font-bold mb-4">${prod.title || ''}</h2>
+        <h2 class="text-base md:text-lg font-bold mb-4 leading-snug">${prod.title || ''}</h2>
         ${prod.imageUrl ? `<img src="${prod.imageUrl}" class="product-image" alt="Product Image">` : ''}
         <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200 mb-4"><span class="bg-yellow-400 text-xs font-bold px-2 py-1 rounded">POINT</span><p class="text-sm mt-2">${prod.point || ''}</p></div>
-        <div class="border rounded-lg p-4">
+        <div class="border border-gray-300 rounded-lg p-4 bg-white shadow-sm">
             <label class="text-xs text-gray-500 font-bold mb-1 block">数量・期間を選択</label>
-            <select id="lot-select" class="w-full border rounded p-2 mb-4 text-base" onchange="updatePrice(${index}, this.value)">${optsHtml}</select>
-            <div class="bg-gray-50 p-4 rounded">
+            <select id="lot-select" class="w-full border border-gray-300 rounded p-2 mb-4 text-base bg-gray-50" onchange="updatePrice(${index}, this.value)">${optsHtml}</select>
+            <div class="bg-gray-50 p-4 rounded border border-gray-200">
                 <div class="text-xs text-gray-500 font-bold mb-1">料金</div>
                 <div class="text-3xl font-bold mb-2">
                     <span id="price-display">${prod.options[0]?.price || ''}</span>
