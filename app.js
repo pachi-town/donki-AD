@@ -59,22 +59,22 @@ function getShortTabName(title) {
     return title.substring(0, 6);
 }
 
-// 【重要修正】画像パスを確実にGitHub Pages用に補正する関数
+// 【修正】余計な補正（/donkiAD/等の付加）をやめ、シートの記述通りの相対パスをクリーンにして返すように変更
 function fixImageUrl(url) {
     if (!url) return '';
-    const cleanUrl = url.trim();
-    // すでに絶対URL（http~）の場合はそのまま
+    let cleanUrl = url.trim();
     if (cleanUrl.startsWith('http')) return cleanUrl;
-    // 「images/pin...」のようにスラッシュ無しで始まっている場合、補正する
-    // ※現在のリポジトリのルートに対する絶対パスに変換
-    if (!cleanUrl.startsWith('/')) {
-        // GitHub PagesのURL構造（/donkiAD/）に合わせて補正
-        return `/donkiAD/${cleanUrl}`;
+    
+    // スプレッドシート側の記述が /images/... となっていた場合、先頭のスラッシュを削除して
+    // 確実に index.html と同じ階層からの相対パス（images/...）にする
+    if (cleanUrl.startsWith('/')) {
+        cleanUrl = cleanUrl.substring(1);
     }
     return cleanUrl;
 }
 
 let stores = [], products = [], map, icons = {}, activeCategories = [], userLat = null, userLng = null, userMarker = null;
+let defaultIconUrl = '';
 
 async function initApp() {
     try {
@@ -85,11 +85,10 @@ async function initApp() {
 
         if(bannerData && bannerData.length > 1) {
             const bannerUrl = bannerData[1][0]; const bannerLink = bannerData[1][1];
-            if(bannerUrl) { const img = document.getElementById('header-banner'); if(img){ img.src = bannerUrl; img.style.display = 'block'; if(bannerLink) img.onclick = () => window.open(bannerLink, '_blank'); } }
+            if(bannerUrl) { const img = document.getElementById('header-banner'); if(img){ img.src = fixImageUrl(bannerUrl); img.style.display = 'block'; if(bannerLink) img.onclick = () => window.open(bannerLink, '_blank'); } }
         }
         
-        // --- Icon（画像パス補正） ---
-        let defaultIconUrl = '';
+        // --- Icon ---
         if(iconData && iconData.length > 1) {
             for(let i=1; i<iconData.length; i++) { 
                 if(iconData[i][0] && iconData[i][1]) {
@@ -103,7 +102,6 @@ async function initApp() {
                         popupAnchor: [0, -32] 
                     });
                     
-                    // 「専門店」の画像URLを、見知らぬカテゴリ用のデフォルトアイコンとして保持
                     if (catName === '専門店') {
                         defaultIconUrl = fixedUrl;
                     }
@@ -124,7 +122,7 @@ async function initApp() {
             const pPrice = getColIndex(pHead, ['料金']) !== -1 ? getColIndex(pHead, ['料金']) : 2;
             const pNote = getColIndex(pHead, ['増減額', 'デザイン']) !== -1 ? getColIndex(pHead, ['増減額', 'デザイン']) : 3;
             const pPoint = getColIndex(pHead, ['POINT']) !== -1 ? getColIndex(pHead, ['POINT']) : 4;
-            const pImg = getColIndex(pHead, ['画像']) !== -1 ? getColIndex(pHead, ['画像']) : 5;
+            const pImg = getColIndex(pHead, ['画像URL', '画像']) !== -1 ? getColIndex(pHead, ['画像URL', '画像']) : 5;
             
             let currentProd = null;
             for(let i=startIdx; i<pricesData.length; i++) {
@@ -134,7 +132,7 @@ async function initApp() {
                     currentProd = { 
                         title: row[pTitle], 
                         point: (row[pPoint] || ''), 
-                        imageUrl: fixImageUrl(row[pImg]), // 画像パス補正
+                        imageUrl: fixImageUrl(row[pImg]), 
                         options: [] 
                     };
                     products.push(currentProd);
@@ -195,7 +193,6 @@ async function initApp() {
 
                 let cat = cCatCol !== -1 ? row[cCatCol] : '';
                 
-                // 【重要修正】iconシートに存在しないカテゴリ（キラキラドンキなど）は、強制的に「専門店」と同じアイコンを適用する
                 if (cat && !icons[cat] && defaultIconUrl !== '') {
                     icons[cat] = L.icon({ 
                         iconUrl: defaultIconUrl, 
@@ -257,9 +254,7 @@ function initMap() {
 }
 
 function getUserLocation(isInit = false) {
-    if (!navigator.geolocation) { 
-        if(!isInit) alert("ブラウザが位置情報に未対応です。"); return; 
-    }
+    if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
         (pos) => {
             userLat = pos.coords.latitude; userLng = pos.coords.longitude;
@@ -377,7 +372,7 @@ function renderModalContent(index) {
     
     content.innerHTML = `
         <h2 class="text-[17px] font-bold mb-4 leading-snug text-gray-800">${prod.title || ''}</h2>
-        ${prod.imageUrl ? `<img src="${prod.imageUrl}" class="product-image" alt="Product Image">` : ''}
+        ${prod.imageUrl ? `<img src="${prod.imageUrl}" class="product-image" alt="Product Image" onerror="this.style.display='none'">` : ''}
         <div class="bg-yellow-50 p-3.5 rounded-lg border border-yellow-200 mb-5"><span class="bg-yellow-400 text-xs font-bold px-2.5 py-1 rounded">POINT</span><p class="text-sm mt-2 text-gray-700">${prod.point || ''}</p></div>
         <div class="border border-gray-200 rounded-xl p-4 bg-white shadow-sm">
             <label class="text-xs text-gray-500 font-bold mb-2 block">数量・期間を選択</label>
