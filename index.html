@@ -2,7 +2,8 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- ↓ スマホでのダブルタップ拡大を地図だけに効かせるための重要設定 ↓ -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ドンキAD MAP</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -19,37 +20,38 @@
         <img id="header-banner" src="" alt="Header Banner">
 
         <div id="search-panel">
-            <div class="flex justify-between items-center mb-2" onclick="toggleSearch()" style="cursor: pointer;">
-                <div class="font-bold flex items-center gap-2">検索・絞り込み</div>
-                <svg id="search-chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 transition-transform"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+            <div class="flex justify-between items-center mb-1" onclick="toggleSearch()" style="cursor: pointer;">
+                <div class="font-bold flex items-center gap-2">🔍 検索・絞り込み</div>
+                <svg id="search-chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 transition-transform"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
             </div>
-            <div id="search-contents" class="space-y-3 hidden">
+            <div id="search-contents" class="space-y-3 hidden mt-3">
                 <div class="flex gap-2 items-center">
-                    <button id="btn-geolocation" onclick="getUserLocation(false)" class="bg-blue-600 text-white px-3 py-2 rounded text-sm font-bold flex-shrink-0">📍現在地から</button>
-                    <select id="radius-select" class="border rounded p-2 text-sm flex-grow" onchange="filterMap()">
+                    <select id="radius-select" class="stylish-select w-full" onchange="filterMap()">
                         <option value="">距離指定なし</option>
-                        <option value="5">半径 5km以内</option>
-                        <option value="10">半径 10km以内</option>
-                        <option value="30">半径 30km以内</option>
-                        <option value="50">半径 50km以内</option>
+                        <option value="5">現在地から 半径 5km以内</option>
+                        <option value="10">現在地から 半径 10km以内</option>
+                        <option value="30">現在地から 半径 30km以内</option>
+                        <option value="50">現在地から 半径 50km以内</option>
                     </select>
                 </div>
                 
-                <select id="pref-select" class="w-full border rounded p-2 text-sm" onchange="updateCities(); filterMap();">
-                    <option value="">都道府県を選択</option>
-                </select>
-                <select id="city-select" class="w-full border rounded p-2 text-sm" onchange="filterMap();">
-                    <option value="">市区町村を選択</option>
-                </select>
-                <div class="flex gap-2 overflow-x-auto pb-1" id="category-filters"></div>
+                <div class="flex gap-2">
+                    <select id="pref-select" class="stylish-select w-1/2" onchange="updateCities(); filterMap();">
+                        <option value="">都道府県</option>
+                    </select>
+                    <select id="city-select" class="stylish-select w-1/2" onchange="filterMap();">
+                        <option value="">市区町村</option>
+                    </select>
+                </div>
+
+                <div class="flex gap-2 overflow-x-auto pb-1" id="category-filters" style="-webkit-overflow-scrolling: touch;"></div>
                 
-                <!-- トグルスイッチ化 -->
-                <div class="toggle-wrapper">
+                <div class="toggle-wrapper mt-2">
                     <label class="toggle-switch">
                         <input type="checkbox" id="show-unavailable" checked onchange="filterMap();">
                         <span class="slider"></span>
                     </label>
-                    <span class="font-bold text-gray-700">掲載不可店舗も表示する</span>
+                    <span class="font-bold text-gray-700 text-sm">掲載不可店舗も表示する</span>
                 </div>
             </div>
         </div>
@@ -58,6 +60,9 @@
             <div id="map"></div>
             <button id="floating-btn" onclick="openModal()">料金、詳細を見る</button>
         </div>
+
+        <!-- 範囲外タップで閉じるための暗い背景 -->
+        <div id="modal-overlay" onclick="closeModal()"></div>
 
         <div id="bottom-modal">
             <div class="modal-handle" onclick="closeModal()"></div>
