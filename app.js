@@ -54,7 +54,6 @@ async function initApp() {
             for(let i=1; i<iconData.length; i++) { if(iconData[i][0] && iconData[i][1]) icons[iconData[i][0]] = L.icon({ iconUrl: iconData[i][1], iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32] }); }
         }
 
-        // --- Prices (画像URL反映) ---
         if(pricesData && pricesData.length > 0) {
             const pHead = pricesData[0];
             const pTitle = getColIndex(pHead, ['商材名']); const pOpt = getColIndex(pHead, ['数量']); const pPrice = getColIndex(pHead, ['料金']);
@@ -72,27 +71,21 @@ async function initApp() {
             }
         }
 
-        // --- Status (ヘッダー名修正対応) ---
         const statusMap = {};
         if(statusData && statusData.length > 0) {
             const stHead = statusData[0];
-            const nCol = getColIndex(stHead, ['カテゴリ']); // ※画像1枚目よりA列(0)がカテゴリ
-            const aCol = getColIndex(stHead, ['住所']);     // D列(3)
-            const uCol = getColIndex(stHead, ['更新日']);   // E列(4)
-            const pCol = getColIndex(stHead, ['ポスター']); // F列(5)
-            const rCol = getColIndex(stHead, ['ポケットティッシュ']); // G列(6)
-            const tCol = getColIndex(stHead, ['ボックスティッシュ']); // H列(7)
-            const gCol1 = getColIndex(stHead, ['防犯ゲート']); // I列(8)
-            const gCol2 = getColIndex(stHead, ['インパクトゲート']); // J列(9)
-            const jCol = getColIndex(stHead, ['店舗内装飾ジャック']); // K列(10)
-            const unCol = getColIndex(stHead, ['施設情報']); // L列(11)
+            const aCol = getColIndex(stHead, ['住所']);     
+            const uCol = getColIndex(stHead, ['更新日']);   
+            const pCol = getColIndex(stHead, ['ポスター']); 
+            const rCol = getColIndex(stHead, ['ポケットティッシュ']); 
+            const tCol = getColIndex(stHead, ['ボックスティッシュ']); 
+            const gCol1 = getColIndex(stHead, ['防犯ゲート']); 
+            const gCol2 = getColIndex(stHead, ['インパクトゲート']); 
+            const jCol = getColIndex(stHead, ['店舗内装飾ジャック']); 
+            const unCol = getColIndex(stHead, ['施設情報']); 
 
-            // C列(2列目, index:1) が店舗名と仮定 (画像には映っていないが座標シートから類推)
-            // ただし、座標シートのA列(店名)とマッチングさせる必要がある。
             for(let i=1; i<statusData.length; i++) {
                 const row = statusData[i];
-                // 【重要修正】画像1枚目の状態だと、店舗名はC列(index:1)ではなく、B列かどこか隠れている可能性があります。
-                // 安全のため、D列の「住所」をキーにして座標シートと結合します。
                 const addr = aCol !== -1 ? row[aCol].trim() : ''; 
                 if(addr) {
                     statusMap[addr] = {
@@ -108,7 +101,6 @@ async function initApp() {
             }
         }
 
-        // --- Coords ---
         if(coordsData && coordsData.length > 0) {
             const coHead = coordsData[0];
             const cNameCol = getColIndex(coHead, ['店舗名']);
@@ -172,9 +164,25 @@ function getUserLocation() {
         (pos) => {
             userLat = pos.coords.latitude; userLng = pos.coords.longitude;
             if(userMarker) map.removeLayer(userMarker);
-            userMarker = L.marker([userLat, userLng]).addTo(map).bindPopup("<b>現在地</b>").openPopup();
-            map.setView([userLat, userLng], 12); document.getElementById('radius-select').value = "10"; filterMap();
-        }, () => { alert("位置取得に失敗しました。"); }
+            
+            // 現在地用の専用アイコン（パルスアニメーション）
+            const userIcon = L.divIcon({
+                className: 'custom-user-marker',
+                html: '<div class="user-pulse"></div>',
+                iconSize: [20, 20],
+                iconAnchor: [10, 10]
+            });
+
+            userMarker = L.marker([userLat, userLng], {icon: userIcon}).addTo(map).bindPopup("<b style='font-size:12px;'>現在地</b>");
+            map.setView([userLat, userLng], 12); 
+            
+            // 距離指定が空の場合のみ、自動的に10kmをセットする
+            const radiusSelect = document.getElementById('radius-select');
+            if (radiusSelect.value === "") {
+                radiusSelect.value = "10"; 
+            }
+            filterMap();
+        }, () => { alert("位置取得に失敗しました。スマホの位置情報設定をご確認ください。"); }
     );
 }
 
@@ -244,7 +252,14 @@ function renderModalContent(index) {
         <div class="border rounded-lg p-4">
             <label class="text-xs text-gray-500 font-bold mb-1 block">数量・期間を選択</label>
             <select id="lot-select" class="w-full border rounded p-2 mb-4 text-base" onchange="updatePrice(${index}, this.value)">${optsHtml}</select>
-            <div class="bg-gray-50 p-4 rounded"><div class="text-xs text-gray-500 font-bold mb-1">料金</div><div class="text-3xl font-bold mb-2" id="price-display">${prod.options[0]?.price || ''}</div><div class="text-xs text-red-500 font-bold" id="note-display">${prod.options[0]?.note || ''}</div></div>
+            <div class="bg-gray-50 p-4 rounded">
+                <div class="text-xs text-gray-500 font-bold mb-1">料金</div>
+                <div class="text-3xl font-bold mb-2">
+                    <span id="price-display">${prod.options[0]?.price || ''}</span>
+                    <span class="text-sm font-normal text-gray-500">（税別）</span>
+                </div>
+                <div class="text-xs text-red-500 font-bold" id="note-display">${prod.options[0]?.note || ''}</div>
+            </div>
         </div>`;
 }
 
