@@ -59,14 +59,25 @@ function getShortTabName(title) {
     return title.substring(0, 6);
 }
 
-// 【完全修正】余計なURL組み立てを捨て、スプレッドシートの記述をそのまま生かす最も確実な処理
-function resolveImageUrl(rawUrl) {
+// 【究極の修正】現在のURL（donki-AD）を基準に、絶対パスを強制的に組み立てる
+function buildAbsoluteImageUrl(rawUrl) {
     if (!rawUrl) return '';
-    let val = rawUrl.trim();
-    if (val.startsWith('http')) return val;
-    // スプレッドシートが "images/pin.png" なら "./images/pin.png" に補正するだけ
-    if (val.startsWith('images/')) return './' + val;
-    return val;
+    const cleanUrl = rawUrl.trim();
+    
+    // 既にhttpから始まる完全なURLならそのまま返す
+    if (cleanUrl.startsWith('http')) return cleanUrl;
+    
+    // スプレッドシート側の記述（./images/pin-mega.png 等）から、ファイル名だけを抽出する
+    // 例: "./images/pin-mega.png" -> "pin-mega.png"
+    const fileName = cleanUrl.split('/').pop();
+    
+    // 現在のブラウザのURLからベースとなるURL（ホスト名＋リポジトリ名）を動的に取得
+    // 例: "https://pachi-town.github.io/donki-AD/"
+    const currentUrl = window.location.href;
+    const baseUrl = currentUrl.substring(0, currentUrl.lastIndexOf('/') + 1);
+    
+    // ベースURLに "images/ファイル名" を結合して完全な絶対パスを作る
+    return `${baseUrl}images/${fileName}`;
 }
 
 let stores = [], products = [], map, icons = {}, activeCategories = [], userLat = null, userLng = null, userMarker = null;
@@ -81,7 +92,7 @@ async function initApp() {
 
         if(bannerData && bannerData.length > 1) {
             const bannerUrl = bannerData[1][0]; const bannerLink = bannerData[1][1];
-            if(bannerUrl) { const img = document.getElementById('header-banner'); if(img){ img.src = resolveImageUrl(bannerUrl); img.style.display = 'block'; if(bannerLink) img.onclick = () => window.open(bannerLink, '_blank'); } }
+            if(bannerUrl) { const img = document.getElementById('header-banner'); if(img){ img.src = buildAbsoluteImageUrl(bannerUrl); img.style.display = 'block'; if(bannerLink) img.onclick = () => window.open(bannerLink, '_blank'); } }
         }
         
         // --- Icon ---
@@ -89,7 +100,9 @@ async function initApp() {
             for(let i=1; i<iconData.length; i++) { 
                 if(iconData[i][0] && iconData[i][1]) {
                     const catName = iconData[i][0].trim();
-                    const finalUrl = resolveImageUrl(iconData[i][1]);
+                    
+                    // 【修正】絶対URLに変換
+                    const finalUrl = buildAbsoluteImageUrl(iconData[i][1]);
                     
                     const iconObj = L.icon({ 
                         iconUrl: finalUrl, 
@@ -99,12 +112,10 @@ async function initApp() {
                     });
                     
                     icons[catName] = iconObj;
-                    // 「専門店」を未知カテゴリの避難先に設定
                     if (catName === '専門店') { defaultIconObj = iconObj; }
                 } 
             }
         }
-        // もし「専門店」が無ければ、見つかった最初のアイコンを予備にする
         if (!defaultIconObj && Object.keys(icons).length > 0) { defaultIconObj = icons[Object.keys(icons)[0]]; }
 
         // --- Prices ---
@@ -127,7 +138,8 @@ async function initApp() {
                 const row = pricesData[i];
                 if(!row || !row[pTitle]) continue;
                 if(!currentProd || currentProd.title !== row[pTitle]) {
-                    currentProd = { title: row[pTitle], point: (row[pPoint] || ''), imageUrl: resolveImageUrl(row[pImg]), options: [] };
+                    // 【修正】絶対URLに変換
+                    currentProd = { title: row[pTitle], point: (row[pPoint] || ''), imageUrl: buildAbsoluteImageUrl(row[pImg]), options: [] };
                     products.push(currentProd);
                 }
                 currentProd.options.push({ label: (row[pOpt] || ''), price: (row[pPrice] || ''), note: (row[pNote] || '') });
@@ -183,7 +195,6 @@ async function initApp() {
                 const stat = statusMap[addr] || { updatedAt: '', poster: 'ー', register: 'ー', tissue: 'ー', gate: 'ー', jack: 'ー', unavailable: '' };
                 const locInfo = extractPrefAndCity(addr);
 
-                // 【修正】カテゴリ名にスペースが混じっていても一致するよう厳密にトリミング
                 const cat = cCatCol !== -1 ? (row[cCatCol] || '').trim() : '';
 
                 stores.push({
@@ -215,7 +226,6 @@ function initMap() {
     stores.forEach(store => {
         if(isNaN(store.lat) || isNaN(store.lng)) return;
         
-        // 【完全修正】アイコンリストに無いカテゴリ（キラキラドンキ等）は確実にデフォルト（専門店）を割り当てる
         let targetIcon = icons[store.category];
         if (!targetIcon && defaultIconObj) {
             targetIcon = defaultIconObj; 
