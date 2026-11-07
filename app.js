@@ -59,18 +59,9 @@ function getShortTabName(title) {
     return title.substring(0, 6);
 }
 
-// 【究極の修正】余計な処理を全廃止。ファイル名だけを抽出し、確実にGitHubの絶対URLに結びつける
-function getSafeImageUrl(rawUrl) {
-    if (!rawUrl) return '';
-    let val = rawUrl.trim();
-    if (val.startsWith('http')) return val; 
-
-    // スプレッドシートの記述（./images/pin-mega.png）から「pin-mega.png」だけを抜き出す
-    const filename = val.split('/').pop().trim();
-    if (!filename) return '';
-
-    // 絶対にリンク切れしない、お客様のGitHub Pagesの完全な画像URLを直接返す
-    return `https://pachi-town.github.io/donki-AD/images/${filename}`;
+// 【完全修正】余計な処理をすべて排除。スプレッドシートの文字をそのまま返す。
+function getRawUrl(url) {
+    return url ? url.trim() : '';
 }
 
 let stores = [], products = [], map, icons = {}, activeCategories = [], userLat = null, userLng = null, userMarker = null;
@@ -83,38 +74,37 @@ async function initApp() {
         ]);
         if(coordsData.length === 0) showError("⚠️ 店舗データが取得できませんでした。");
 
-        // --- バナー画像の処理 ---
+        // --- ヘッダーバナー ---
         if(bannerData && bannerData.length > 1) {
             const bannerUrl = bannerData[1][0]; const bannerLink = bannerData[1][1];
             if(bannerUrl) { 
                 const img = document.getElementById('header-banner'); 
-                if(img){ img.src = getSafeImageUrl(bannerUrl); img.style.display = 'block'; if(bannerLink) img.onclick = () => window.open(bannerLink, '_blank'); } 
+                if(img){ img.src = getRawUrl(bannerUrl); img.style.display = 'block'; if(bannerLink) img.onclick = () => window.open(bannerLink, '_blank'); } 
             }
         }
         
-        // --- iconシートの処理 ---
+        // --- Icon（ピン画像） ---
         if(iconData && iconData.length > 1) {
             for(let i=1; i<iconData.length; i++) { 
                 if(iconData[i][0] && iconData[i][1]) {
                     const catName = iconData[i][0].trim();
-                    const finalUrl = getSafeImageUrl(iconData[i][1]);
+                    const rawUrl = getRawUrl(iconData[i][1]);
                     
                     const iconObj = L.icon({ 
-                        iconUrl: finalUrl, 
+                        iconUrl: rawUrl, 
                         iconSize: [32, 32], 
                         iconAnchor: [16, 32], 
                         popupAnchor: [0, -32] 
                     });
                     
                     icons[catName] = iconObj;
-                    
-                    // 「専門店」をデフォルトアイコンとして確保
                     if (catName === '専門店') { defaultIconObj = iconObj; }
                 } 
             }
         }
+        if (!defaultIconObj && Object.keys(icons).length > 0) { defaultIconObj = icons[Object.keys(icons)[0]]; }
 
-        // --- Pricesシートの処理 ---
+        // --- Prices（料金表） ---
         if(pricesData && pricesData.length > 0) {
             let pHead = pricesData[0];
             let startIdx = 1;
@@ -137,7 +127,7 @@ async function initApp() {
                     currentProd = { 
                         title: row[pTitle], 
                         point: (row[pPoint] || ''), 
-                        imageUrl: getSafeImageUrl(row[pImg]), 
+                        imageUrl: getRawUrl(row[pImg]), 
                         options: [] 
                     };
                     products.push(currentProd);
@@ -147,10 +137,10 @@ async function initApp() {
         }
 
         if(products.length === 0) {
-            products = [{ title: 'エラー: 料金データがありません', point: '', imageUrl: '', options: [{label: '-', price: '-', note: '-'}] }];
+            products = [{ title: 'データがありません', point: '', imageUrl: '', options: [{label: '-', price: '-', note: '-'}] }];
         }
 
-        // --- 開催状況集計の処理 ---
+        // --- 開催状況集計 ---
         const statusMap = {};
         if(statusData && statusData.length > 0) {
             const stHead = statusData[0];
@@ -181,7 +171,7 @@ async function initApp() {
             }
         }
 
-        // --- 店舗座標の処理とカテゴリの集約 ---
+        // --- 店舗座標 ---
         if(coordsData && coordsData.length > 0) {
             const coHead = coordsData[0];
             const cNameCol = getColIndex(coHead, ['店舗名']); const cCatCol = getColIndex(coHead, ['カテゴリ']);
@@ -197,7 +187,7 @@ async function initApp() {
 
                 let catName = cCatCol !== -1 ? (row[cCatCol] || '').trim() : '';
                 
-                // 【重要修正】「キラキラドンキ」など、iconシートに未登録のカテゴリは「専門店」に書き換えて集約する
+                // アイコンが未登録のカテゴリ（キラキラドンキ等）は確実に「専門店」に集約
                 if (catName && !icons[catName]) {
                     catName = '専門店';
                 }
@@ -231,11 +221,10 @@ function initMap() {
     stores.forEach(store => {
         if(isNaN(store.lat) || isNaN(store.lng)) return;
         
-        // アイコンを割り当てる（集約済みなので基本は当たる）
         let targetIcon = icons[store.category];
         if (!targetIcon && defaultIconObj) { targetIcon = defaultIconObj; }
+        
         const mOpt = targetIcon ? { icon: targetIcon } : {};
-
         const marker = L.marker([store.lat, store.lng], mOpt).addTo(map);
         store.marker = marker; bounds.push([store.lat, store.lng]);
         
@@ -250,7 +239,7 @@ function initMap() {
                     <div class="status-item"><span>BOXティッシュ</span> <span>${store.records.tissue}</span></div>
                     <div class="status-item"><span>A1ポスター</span> <span>${store.records.poster}</span></div>
                     <div class="status-item"><span>ゲート</span> <span>${store.records.gate}</span></div>
-                    <div class="status-item"><span>ティッシュ配布</span> <span>${store.records.register}</span></div>
+                    <div class="status-item"><span>手渡し配布</span> <span>${store.records.register}</span></div>
                     <div class="status-item"><span>装飾ジャック</span> <span>${store.records.jack}</span></div>
                 </div>
             </div>`);
@@ -375,10 +364,9 @@ function renderModalContent(index) {
     let optsHtml = prod.options.map((opt, i) => `<option value="${i}">${opt.label}</option>`).join('');
     const content = document.getElementById('modal-content'); if(!content) return;
     
-    // 画像URLがセットされている場合は imgタグ を出力（画像が見つからない場合は非表示）
     content.innerHTML = `
         <h2 class="text-[17px] font-bold mb-4 leading-snug text-gray-800">${prod.title || ''}</h2>
-        ${prod.imageUrl ? `<img src="${prod.imageUrl}" class="product-image" alt="Product Image" onerror="this.style.display='none'">` : ''}
+        ${prod.imageUrl ? `<img src="${prod.imageUrl}" class="product-image" alt="画像" onerror="this.style.display='none'">` : ''}
         <div class="bg-yellow-50 p-3.5 rounded-lg border border-yellow-200 mb-5"><span class="bg-yellow-400 text-xs font-bold px-2.5 py-1 rounded">POINT</span><p class="text-sm mt-2 text-gray-700">${prod.point || ''}</p></div>
         <div class="border border-gray-200 rounded-xl p-4 bg-white shadow-sm">
             <label class="text-xs text-gray-500 font-bold mb-2 block">数量・期間を選択</label>
