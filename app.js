@@ -4,8 +4,18 @@ const PREF_ORDER = ["北海道","青森県","岩手県","宮城県","秋田県",
 function showError(msg) { const eb = document.getElementById('error-banner'); if(eb){ eb.innerText = msg; eb.style.display = 'block'; } }
 
 async function fetchCSV(sheetName) {
-    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
-    try { const res = await fetch(url); if (!res.ok) return []; const text = await res.text(); return parseCSV(text); } 
+    // 【重要修正】URLの末尾に「&_t=現在時刻」をつけて、ブラウザに毎回違うURLだと思わせて強制的に最新データを取得させる（キャッシュ対策）
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}&_t=${new Date().getTime()}`;
+    try { 
+        // fetchにもキャッシュ無効化のオプションを付与
+        const res = await fetch(url, { cache: 'no-store' }); 
+        if (!res.ok) return []; 
+        const text = await res.text(); 
+        
+        // 万が一Googleのログイン画面やエラーHTMLが返ってきた場合は弾く
+        if(text.trim().startsWith('<')) return [];
+        return parseCSV(text); 
+    } 
     catch (e) { return []; }
 }
 
@@ -43,8 +53,18 @@ function getDistance(lat1, lon1, lat2, lon2) {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); return R * c;
 }
 
+// 商材タイトルから短いタブ名を自動生成する関数
+function getShortTabName(title) {
+    if (!title) return '詳細';
+    if (title.includes('ティッシュ手渡し') || title.includes('ポケットティッシュ')) return 'ティッシュ手渡し';
+    if (title.includes('ボックスティッシュ') || title.includes('BOX')) return 'BOXティッシュ';
+    if (title.includes('ポスター')) return 'ポスター';
+    if (title.includes('ゲート')) return 'ゲート';
+    if (title.includes('ジャック') || title.includes('装飾')) return '店舗ジャック';
+    return title.substring(0, 6);
+}
+
 let stores = [], products = [], map, icons = {}, activeCategories = [], userLat = null, userLng = null, userMarker = null;
-const productTabs = ['BOXティッシュ', 'ポスター', 'ゲート', 'ティッシュ手渡し', '店舗ジャック'];
 
 async function initApp() {
     try {
@@ -61,11 +81,10 @@ async function initApp() {
             for(let i=1; i<iconData.length; i++) { if(iconData[i][0] && iconData[i][1]) icons[iconData[i][0]] = L.icon({ iconUrl: iconData[i][1], iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32] }); }
         }
 
-        // --- Prices（強力な検索と安全網） ---
         if(pricesData && pricesData.length > 0) {
             let pHead = pricesData[0];
             let startIdx = 1;
-            // ヘッダー行が1行目でない場合を探す
+            // ヘッダーが1行目にない場合への対策
             for(let i=0; i<Math.min(5, pricesData.length); i++) {
                 if(pricesData[i].join('').includes('商材名')) { pHead = pricesData[i]; startIdx = i + 1; break; }
             }
@@ -80,7 +99,7 @@ async function initApp() {
             let currentProd = null;
             for(let i=startIdx; i<pricesData.length; i++) {
                 const row = pricesData[i];
-                if(!row[pTitle]) continue;
+                if(!row || !row[pTitle]) continue;
                 if(!currentProd || currentProd.title !== row[pTitle]) {
                     currentProd = { title: row[pTitle], point: (row[pPoint] || ''), imageUrl: (row[pImg] || ''), options: [] };
                     products.push(currentProd);
@@ -89,18 +108,14 @@ async function initApp() {
             }
         }
 
-        // もしデータが空になってしまった場合のフォールバック（真っ白防止策）
+        // 予備データ（スプシが空の場合用）
         if(products.length === 0) {
             products = [
-                { title: 'ドンキAD CMボックスティッシュ販売', point: 'ドン・キホーテ店内にてオリジナルティッシュを販売していただく事が可能です！', imageUrl: '', options: [{label: '1,008個', price: '934,270円', note: '自社デザインの場合 -30,000円'}] },
-                { title: 'ドンキAD ADスペース（ポスター掲示）', point: '店舗内にてポスターを掲示致します。', imageUrl: '', options: [{label: '1ヶ月間', price: '40,000円', note: 'DMMにて作成の場合 +30,000円'}] },
-                { title: 'ドンキAD インパクトゲート', point: '店頭・店内にある防犯ゲートを広告スペースに', imageUrl: '', options: [{label: '2本', price: '130,000円', note: '自社デザインの場合 -30,000円'}] },
-                { title: 'ドンキAD レジでのポケットティッシュ手渡し', point: 'お会計時にお買い物されたお客様へお配りします。', imageUrl: '', options: [{label: '1,000個', price: '142,500円', note: '自社デザインの場合 -30,000円'}] },
-                { title: 'ドンキAD 店舗内装飾ジャック', point: '店舗内を広告で埋め尽くす店内ジャック。', imageUrl: '', options: [{label: '1ヶ月間', price: '都度確認', note: 'DMMにて作成の場合 +30,000円'}] }
+                { title: 'CMボックスティッシュ販売', point: 'ドン・キホーテ店内にてオリジナルティッシュを販売していただく事が可能です！', imageUrl: '', options: [{label: '1,008個', price: '934,270円', note: '自社デザインの場合 -30,000円'}] },
+                { title: 'ポスター掲示（A1サイズ）', point: '店舗内にてポスターを掲示致します。', imageUrl: '', options: [{label: '1ヶ月間', price: '40,000円', note: 'DMMにて作成の場合 +30,000円'}] }
             ];
         }
 
-        // --- Status ---
         const statusMap = {};
         if(statusData && statusData.length > 0) {
             const stHead = statusData[0];
@@ -131,7 +146,6 @@ async function initApp() {
             }
         }
 
-        // --- Coords ---
         if(coordsData && coordsData.length > 0) {
             const coHead = coordsData[0];
             const cNameCol = getColIndex(coHead, ['店舗名']); const cCatCol = getColIndex(coHead, ['カテゴリ']);
@@ -295,7 +309,9 @@ function initModal() {
     const tabs = document.getElementById('modal-tabs'); if(!tabs) return;
     tabs.innerHTML = '';
     products.forEach((p, i) => {
-        const t = document.createElement('div'); t.className = `modal-tab ${i === 0 ? 'active' : ''}`; t.innerText = productTabs[i] || (p.title?p.title.substring(0,6):'詳細');
+        const t = document.createElement('div'); t.className = `modal-tab ${i === 0 ? 'active' : ''}`; 
+        // 【修正】商材名から動的に短いタブ名を作成
+        t.innerText = getShortTabName(p.title);
         t.onclick = () => selectTab(i); tabs.appendChild(t);
     });
     if(products.length > 0) renderModalContent(0);
