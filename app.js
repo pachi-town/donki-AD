@@ -4,9 +4,9 @@ const PREF_ORDER = ["北海道","青森県","岩手県","宮城県","秋田県",
 function showError(msg) { const eb = document.getElementById('error-banner'); if(eb){ eb.innerText = msg; eb.style.display = 'block'; } }
 
 async function fetchCSV(sheetName) {
-    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}&_t=${new Date().getTime()}`;
     try { 
-        const res = await fetch(url); 
+        const res = await fetch(url, { cache: 'no-store' }); 
         if (!res.ok) return []; 
         const text = await res.text(); 
         if(text.trim().startsWith('<')) return [];
@@ -51,7 +51,7 @@ function getDistance(lat1, lon1, lat2, lon2) {
 
 function getShortTabName(title) {
     if (!title) return '詳細';
-    if (title.includes('手渡し') || title.includes('ポケット')) return '手渡し配布';
+    if (title.includes('手渡し') || title.includes('ポケット')) return 'ティッシュ手渡し';
     if (title.includes('ボックス') || title.includes('BOX')) return 'BOXティッシュ';
     if (title.includes('ポスター')) return 'ポスター';
     if (title.includes('ゲート')) return 'ゲート';
@@ -59,17 +59,18 @@ function getShortTabName(title) {
     return title.substring(0, 6);
 }
 
-// 【完全リセット】スプレッドシートの記述（images/...）の頭に ./ をつけるだけ
-function getCleanImagePath(rawStr) {
-    if (!rawStr) return '';
-    let val = rawStr.trim();
-    if (val.startsWith('http')) return val; // 直接URLの場合はそのまま
-    // "images/pin/pin-mega.png" のような文字列なら "./images/pin/pin-mega.png" にする
-    if (!val.startsWith('./') && !val.startsWith('/')) {
-        return './' + val;
-    }
-    // もし "/images/..." や "./images/..." と書かれていたらそのまま返す
-    return val.startsWith('/') ? '.' + val : val;
+// 【究極の修正】余計な処理を全廃止。ファイル名だけを抽出し、確実にGitHubの絶対URLに結びつける
+function getSafeImageUrl(rawUrl) {
+    if (!rawUrl) return '';
+    let val = rawUrl.trim();
+    if (val.startsWith('http')) return val; 
+
+    // スプレッドシートの記述（./images/pin-mega.png）から「pin-mega.png」だけを抜き出す
+    const filename = val.split('/').pop().trim();
+    if (!filename) return '';
+
+    // 絶対にリンク切れしない、お客様のGitHub Pagesの完全な画像URLを直接返す
+    return `https://pachi-town.github.io/donki-AD/images/${filename}`;
 }
 
 let stores = [], products = [], map, icons = {}, activeCategories = [], userLat = null, userLng = null, userMarker = null;
@@ -82,12 +83,12 @@ async function initApp() {
         ]);
         if(coordsData.length === 0) showError("⚠️ 店舗データが取得できませんでした。");
 
-        // --- バナー画像のセット ---
+        // --- バナー画像の処理 ---
         if(bannerData && bannerData.length > 1) {
             const bannerUrl = bannerData[1][0]; const bannerLink = bannerData[1][1];
             if(bannerUrl) { 
                 const img = document.getElementById('header-banner'); 
-                if(img){ img.src = getCleanImagePath(bannerUrl); img.style.display = 'block'; if(bannerLink) img.onclick = () => window.open(bannerLink, '_blank'); } 
+                if(img){ img.src = getSafeImageUrl(bannerUrl); img.style.display = 'block'; if(bannerLink) img.onclick = () => window.open(bannerLink, '_blank'); } 
             }
         }
         
@@ -96,10 +97,10 @@ async function initApp() {
             for(let i=1; i<iconData.length; i++) { 
                 if(iconData[i][0] && iconData[i][1]) {
                     const catName = iconData[i][0].trim();
-                    const imgPath = getCleanImagePath(iconData[i][1]);
+                    const finalUrl = getSafeImageUrl(iconData[i][1]);
                     
                     const iconObj = L.icon({ 
-                        iconUrl: imgPath, 
+                        iconUrl: finalUrl, 
                         iconSize: [32, 32], 
                         iconAnchor: [16, 32], 
                         popupAnchor: [0, -32] 
@@ -136,7 +137,7 @@ async function initApp() {
                     currentProd = { 
                         title: row[pTitle], 
                         point: (row[pPoint] || ''), 
-                        imageUrl: getCleanImagePath(row[pImg]), 
+                        imageUrl: getSafeImageUrl(row[pImg]), 
                         options: [] 
                     };
                     products.push(currentProd);
@@ -180,7 +181,7 @@ async function initApp() {
             }
         }
 
-        // --- 店舗座標の処理と合体 ---
+        // --- 店舗座標の処理とカテゴリの集約 ---
         if(coordsData && coordsData.length > 0) {
             const coHead = coordsData[0];
             const cNameCol = getColIndex(coHead, ['店舗名']); const cCatCol = getColIndex(coHead, ['カテゴリ']);
@@ -196,7 +197,7 @@ async function initApp() {
 
                 let catName = cCatCol !== -1 ? (row[cCatCol] || '').trim() : '';
                 
-                // アイコンリストに存在しないカテゴリ（キラキラドンキ等）は「専門店」として扱う
+                // 【重要修正】「キラキラドンキ」など、iconシートに未登録のカテゴリは「専門店」に書き換えて集約する
                 if (catName && !icons[catName]) {
                     catName = '専門店';
                 }
@@ -230,10 +231,11 @@ function initMap() {
     stores.forEach(store => {
         if(isNaN(store.lat) || isNaN(store.lng)) return;
         
+        // アイコンを割り当てる（集約済みなので基本は当たる）
         let targetIcon = icons[store.category];
         if (!targetIcon && defaultIconObj) { targetIcon = defaultIconObj; }
-        
         const mOpt = targetIcon ? { icon: targetIcon } : {};
+
         const marker = L.marker([store.lat, store.lng], mOpt).addTo(map);
         store.marker = marker; bounds.push([store.lat, store.lng]);
         
@@ -248,7 +250,7 @@ function initMap() {
                     <div class="status-item"><span>BOXティッシュ</span> <span>${store.records.tissue}</span></div>
                     <div class="status-item"><span>A1ポスター</span> <span>${store.records.poster}</span></div>
                     <div class="status-item"><span>ゲート</span> <span>${store.records.gate}</span></div>
-                    <div class="status-item"><span>手渡し配布</span> <span>${store.records.register}</span></div>
+                    <div class="status-item"><span>ティッシュ配布</span> <span>${store.records.register}</span></div>
                     <div class="status-item"><span>装飾ジャック</span> <span>${store.records.jack}</span></div>
                 </div>
             </div>`);
@@ -373,9 +375,10 @@ function renderModalContent(index) {
     let optsHtml = prod.options.map((opt, i) => `<option value="${i}">${opt.label}</option>`).join('');
     const content = document.getElementById('modal-content'); if(!content) return;
     
+    // 画像URLがセットされている場合は imgタグ を出力（画像が見つからない場合は非表示）
     content.innerHTML = `
         <h2 class="text-[17px] font-bold mb-4 leading-snug text-gray-800">${prod.title || ''}</h2>
-        ${prod.imageUrl ? `<img src="${prod.imageUrl}" class="product-image" alt="画像" onerror="this.style.display='none'">` : ''}
+        ${prod.imageUrl ? `<img src="${prod.imageUrl}" class="product-image" alt="Product Image" onerror="this.style.display='none'">` : ''}
         <div class="bg-yellow-50 p-3.5 rounded-lg border border-yellow-200 mb-5"><span class="bg-yellow-400 text-xs font-bold px-2.5 py-1 rounded">POINT</span><p class="text-sm mt-2 text-gray-700">${prod.point || ''}</p></div>
         <div class="border border-gray-200 rounded-xl p-4 bg-white shadow-sm">
             <label class="text-xs text-gray-500 font-bold mb-2 block">数量・期間を選択</label>
