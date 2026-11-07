@@ -292,8 +292,8 @@ function initMap() {
         marker.bindPopup(`
             <div class="popup-header">${iconSrc ? `<img class="popup-icon" src="${iconSrc}" alt="">` : ''}<span>${store.name}</span></div>
             <div class="popup-body">
-                ${isUnav ? `<div class="unavailable-overlay"><div class="unavailable-stamp">掲載不可<br>(施設都合上)</div></div>` : ''}
                 <div class="status-row"><span class="text-gray-500">更新日</span><span class="font-bold bg-gray-100 px-2 rounded">${dateText}</span></div>
+                ${isUnav ? `<div class="unavailable-block"><div class="unavailable-stamp">掲載不可<br>(施設都合上)</div></div>` : `
                 <div class="mt-3 mb-1 text-xs font-bold text-gray-400">過去の広告実績</div>
                 <div class="status-grid">
                     <div class="status-item"><span>BOXティッシュ</span> ${recordBadge(store.records.tissue)}</div>
@@ -302,6 +302,7 @@ function initMap() {
                     <div class="status-item"><span>手渡し配布</span> ${recordBadge(store.records.register)}</div>
                     <div class="status-item"><span>装飾ジャック</span> ${recordBadge(store.records.jack)}</div>
                 </div>
+                `}
             </div>`);
     });
     if(bounds.length > 0) map.fitBounds(bounds, { padding: [50, 50] });
