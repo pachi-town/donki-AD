@@ -24,7 +24,6 @@
                 <svg id="search-chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 transition-transform"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
             </div>
             <div id="search-contents" class="space-y-3 hidden mt-3">
-                
                 <div class="flex items-center w-full bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
                     <input type="number" id="radius-input" class="w-full bg-transparent px-3 py-2.5 text-sm outline-none text-gray-800" placeholder="現在地からの距離を入力" oninput="filterMap()">
                     <span class="text-xs text-gray-500 font-bold px-3 border-l border-gray-200 whitespace-nowrap bg-gray-100 py-3">km以内</span>
@@ -39,7 +38,6 @@
                     </select>
                 </div>
 
-                <!-- カテゴリフィルタエリア -->
                 <div class="flex gap-2 overflow-x-auto pb-1 items-center" id="category-filters" style="-webkit-overflow-scrolling: touch;"></div>
                 
                 <div class="toggle-wrapper mt-2">
@@ -54,14 +52,14 @@
 
         <div id="map-container">
             <div id="map"></div>
-            
-            <!-- 【追加】地図右上の独立したGPSボタン -->
+            <!-- GPSボタン -->
             <button id="gps-floating-btn" onclick="recenterMap()" title="現在地に戻る">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
             </button>
-
-            <button id="floating-btn" onclick="openModal()">料金、詳細を見る</button>
         </div>
+
+        <!-- 【重要修正】地図のレンダリングに影響されないよう、一番上の階層にボタンを配置 -->
+        <button id="floating-btn" onclick="openModal()">商材情報・料金を見る</button>
 
         <div id="modal-overlay" onclick="closeModal()"></div>
 
