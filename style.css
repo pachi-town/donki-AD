@@ -79,3 +79,6 @@ input:checked + .slider:before { transform: translateX(20px); }
 .rec-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 28px; line-height: 1; flex-shrink: 0; }
 .rec-none { color: #c4c9d1; font-size: 16px; font-weight: 500; }
 .rec-other { height: 24px; padding: 0 9px; border-radius: 999px; font-size: 12px; font-weight: 700; color: #374151; background: #e5e7eb; }
+
+/* 掲載不可の店舗: 実績リストの代わりにスタンプだけを中央に表示 */
+.unavailable-block { display: flex; justify-content: center; padding: 18px 0 10px; }
