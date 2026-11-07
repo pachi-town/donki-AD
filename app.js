@@ -253,11 +253,18 @@ async function initApp() {
     } catch(err) { console.error(err); showError("⚠️ システムエラーが発生しました。"); }
 }
 
-// 広告実績の値(○ × ー など)を、見やすい丸バッジのHTMLに変換する
+// 広告実績の値(○ × ー など)を、太さの揃った記号(SVG)のHTMLに変換する
 function recordBadge(v) {
     const t = (v || '').toString().trim();
-    if(['○', '◯', '〇', 'o', 'O'].includes(t)) return '<span class="rec-badge rec-yes">○</span>';
-    if(['×', '✕', '✖', 'x', 'X'].includes(t)) return '<span class="rec-badge rec-no">×</span>';
+    // ○ = OK(緑の太い輪)
+    if(['○', '◯', '〇', 'o', 'O'].includes(t)) {
+        return '<span class="rec-badge" aria-label="OK"><svg viewBox="0 0 24 24" width="28" height="28"><circle cx="12" cy="12" r="8.5" fill="none" stroke="#16a34a" stroke-width="3.2"/></svg></span>';
+    }
+    // × = NG(赤の太いバツ)
+    if(['×', '✕', '✖', 'x', 'X'].includes(t)) {
+        return '<span class="rec-badge" aria-label="NG"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M5.5 5.5 L18.5 18.5 M18.5 5.5 L5.5 18.5" stroke="#dc2626" stroke-width="3.4" stroke-linecap="round" fill="none"/></svg></span>';
+    }
+    // ー = 実績なし(薄いグレー)
     if(t === '' || ['ー', '-', '―', '—', '－'].includes(t)) return '<span class="rec-badge rec-none">ー</span>';
     return `<span class="rec-badge rec-other">${t}</span>`; // それ以外の値(△・数字など)はそのまま表示
 }
