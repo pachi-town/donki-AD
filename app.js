@@ -59,25 +59,21 @@ function getShortTabName(title) {
     return title.substring(0, 6);
 }
 
-// 【重要修正】GitHub PagesのどのURL環境から開かれても絶対に画像パスが迷子にならない強力な補正関数
-function fixImageUrl(url) {
+// 【完全修正】リポジトリ名等の自動判定を捨て、最も安全な相対パス（./images/）を返す
+function getSafeImageUrl(url) {
     if (!url) return '';
     let cleanUrl = url.trim();
     if (cleanUrl.startsWith('http')) return cleanUrl;
-    if (cleanUrl.startsWith('./')) cleanUrl = cleanUrl.substring(2);
-    if (cleanUrl.startsWith('/')) cleanUrl = cleanUrl.substring(1);
     
-    // GitHub Pagesの場合、リポジトリ名（donki-AD）を自動判定して絶対URLを構築する
-    if (window.location.hostname.includes('github.io')) {
-        const pathParts = window.location.pathname.split('/');
-        const repoName = pathParts[1] ? `/${pathParts[1]}/` : '/';
-        return window.location.origin + repoName + cleanUrl;
-    }
-    return cleanUrl;
+    // 先頭のスラッシュ等を削り、純粋な相対パスにする
+    cleanUrl = cleanUrl.replace(/^[\.\/]+/, '');
+    
+    // 先頭に強制的に ./ をつけて、必ずindex.htmlと同じ階層から探しにいく
+    return `./${cleanUrl}`;
 }
 
 let stores = [], products = [], map, icons = {}, activeCategories = [], userLat = null, userLng = null, userMarker = null;
-let defaultIconObj = null; // 【追加】未知のカテゴリ用のデフォルトアイコン（専門店）
+let defaultIconObj = null;
 
 async function initApp() {
     try {
@@ -88,15 +84,15 @@ async function initApp() {
 
         if(bannerData && bannerData.length > 1) {
             const bannerUrl = bannerData[1][0]; const bannerLink = bannerData[1][1];
-            if(bannerUrl) { const img = document.getElementById('header-banner'); if(img){ img.src = fixImageUrl(bannerUrl); img.style.display = 'block'; if(bannerLink) img.onclick = () => window.open(bannerLink, '_blank'); } }
+            if(bannerUrl) { const img = document.getElementById('header-banner'); if(img){ img.src = getSafeImageUrl(bannerUrl); img.style.display = 'block'; if(bannerLink) img.onclick = () => window.open(bannerLink, '_blank'); } }
         }
         
-        // --- Icon（アイコンの生成とデフォルトの確保） ---
+        // --- Icon ---
         if(iconData && iconData.length > 1) {
             for(let i=1; i<iconData.length; i++) { 
                 if(iconData[i][0] && iconData[i][1]) {
                     const catName = iconData[i][0].trim();
-                    const fixedUrl = fixImageUrl(iconData[i][1]);
+                    const fixedUrl = getSafeImageUrl(iconData[i][1]);
                     
                     const iconObj = L.icon({ 
                         iconUrl: fixedUrl, 
@@ -107,14 +103,12 @@ async function initApp() {
                     
                     icons[catName] = iconObj;
                     
-                    // 「専門店」をデフォルトアイコンとして登録
                     if (catName === '専門店') {
                         defaultIconObj = iconObj;
                     }
                 } 
             }
         }
-        // もし「専門店」が設定されていなくても、読み込めた一番最初のアイコンを予備のデフォルトにする
         if (!defaultIconObj && Object.keys(icons).length > 0) {
             defaultIconObj = icons[Object.keys(icons)[0]];
         }
@@ -142,7 +136,7 @@ async function initApp() {
                     currentProd = { 
                         title: row[pTitle], 
                         point: (row[pPoint] || ''), 
-                        imageUrl: fixImageUrl(row[pImg]), 
+                        imageUrl: getSafeImageUrl(row[pImg]), 
                         options: [] 
                     };
                     products.push(currentProd);
@@ -201,8 +195,15 @@ async function initApp() {
                 const stat = statusMap[addr] || { updatedAt: '', poster: 'ー', register: 'ー', tissue: 'ー', gate: 'ー', jack: 'ー', unavailable: '' };
                 const locInfo = extractPrefAndCity(addr);
 
+                let cat = cCatCol !== -1 ? row[cCatCol] : '';
+                
+                // 【追加】iconシートに存在しないカテゴリは、データを格納する時点で強制的に「専門店」に変更し、漏れを完全に防ぐ
+                if (cat && !icons[cat]) {
+                    cat = '専門店';
+                }
+
                 stores.push({
-                    name: cNameCol !== -1 ? row[cNameCol] : '', category: cCatCol !== -1 ? row[cCatCol] : '',
+                    name: cNameCol !== -1 ? row[cNameCol] : '', category: cat,
                     pref: locInfo.pref, city: locInfo.city, lat: parseFloat(row[cLatCol]), lng: parseFloat(row[cLngCol]),
                     updatedAt: stat.updatedAt, unavailable: stat.unavailable,
                     records: { tissue: stat.tissue, poster: stat.poster, gate: stat.gate, register: stat.register, jack: stat.jack }, marker: null
@@ -230,7 +231,6 @@ function initMap() {
     stores.forEach(store => {
         if(isNaN(store.lat) || isNaN(store.lng)) return;
         
-        // 【重要修正】一致するアイコンがなければ、専門店（デフォルト）のアイコンを割り当てる
         let mOpt = {};
         if (icons[store.category]) {
             mOpt = { icon: icons[store.category] };
@@ -261,9 +261,7 @@ function initMap() {
 }
 
 function getUserLocation(isInit = false) {
-    if (!navigator.geolocation) { 
-        if(!isInit) alert("ブラウザが位置情報に未対応です。"); return; 
-    }
+    if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
         (pos) => {
             userLat = pos.coords.latitude; userLng = pos.coords.longitude;
@@ -379,6 +377,7 @@ function renderModalContent(index) {
     let optsHtml = prod.options.map((opt, i) => `<option value="${i}">${opt.label}</option>`).join('');
     const content = document.getElementById('modal-content'); if(!content) return;
     
+    // 【追加】画像読み込みエラー時に非表示にするonerror処理を強化
     content.innerHTML = `
         <h2 class="text-[17px] font-bold mb-4 leading-snug text-gray-800">${prod.title || ''}</h2>
         ${prod.imageUrl ? `<img src="${prod.imageUrl}" class="product-image" alt="Product Image" onerror="this.style.display='none'">` : ''}
