@@ -59,21 +59,6 @@ function getShortTabName(title) {
     return title.substring(0, 6);
 }
 
-// 【完全修正】URLスラッシュ問題に左右されない絶対パスを強制生成する
-function getSafeImageUrl(rawUrl) {
-    if (!rawUrl) return '';
-    let val = rawUrl.trim();
-    if (val.startsWith('http')) return val;
-    
-    // スプレッドシートの "./images/pin/pin-mega.png" などから先頭の "./" または "/" を削除
-    // 結果: "images/pin/pin-mega.png"
-    val = val.replace(/^[\.\/]+/, '');
-    
-    // リポジトリ名「/donki-AD/」を固定で付けた絶対パスにする
-    // どのURLで開かれても必ずルートから探しにいくため迷子になりません
-    return '/donki-AD/' + val;
-}
-
 let stores = [], products = [], map, icons = {}, activeCategories = [], userLat = null, userLng = null, userMarker = null;
 let defaultIconObj = null;
 
@@ -84,23 +69,25 @@ async function initApp() {
         ]);
         if(coordsData.length === 0) showError("⚠️ 店舗データが取得できませんでした。");
 
+        // --- ヘッダーバナー ---
         if(bannerData && bannerData.length > 1) {
             const bannerUrl = bannerData[1][0]; const bannerLink = bannerData[1][1];
             if(bannerUrl) { 
                 const img = document.getElementById('header-banner'); 
-                if(img){ img.src = getSafeImageUrl(bannerUrl); img.style.display = 'block'; if(bannerLink) img.onclick = () => window.open(bannerLink, '_blank'); } 
+                // スプレッドシートの文字をそのままセット
+                if(img){ img.src = bannerUrl.trim(); img.style.display = 'block'; if(bannerLink) img.onclick = () => window.open(bannerLink, '_blank'); } 
             }
         }
         
-        // --- Icon ---
+        // --- Icon（スプレッドシートのパスを一文字も変えずにセットする） ---
         if(iconData && iconData.length > 1) {
             for(let i=1; i<iconData.length; i++) { 
                 if(iconData[i][0] && iconData[i][1]) {
                     const catName = iconData[i][0].trim();
-                    const imgUrl = getSafeImageUrl(iconData[i][1]);
+                    const rawUrl = iconData[i][1].trim(); // 例: "./images/pin/pin-mega.png" をそのまま使う
                     
                     const iconObj = L.icon({ 
-                        iconUrl: imgUrl, 
+                        iconUrl: rawUrl, 
                         iconSize: [32, 32], 
                         iconAnchor: [16, 32], 
                         popupAnchor: [0, -32] 
@@ -136,7 +123,7 @@ async function initApp() {
                     currentProd = { 
                         title: row[pTitle], 
                         point: (row[pPoint] || ''), 
-                        imageUrl: getSafeImageUrl(row[pImg]), 
+                        imageUrl: row[pImg] ? row[pImg].trim() : '', // スプレッドシートの文字をそのままセット
                         options: [] 
                     };
                     products.push(currentProd);
@@ -196,7 +183,7 @@ async function initApp() {
 
                 let catName = cCatCol !== -1 ? (row[cCatCol] || '').trim() : '';
                 
-                // アイコンが未登録のカテゴリは「専門店」に書き換えて集約
+                // アイコンリストに未登録のカテゴリは「専門店」に書き換えて集約
                 if (catName && !icons[catName]) {
                     catName = '専門店';
                 }
@@ -232,8 +219,8 @@ function initMap() {
         
         let targetIcon = icons[store.category];
         if (!targetIcon && defaultIconObj) { targetIcon = defaultIconObj; }
+        
         const mOpt = targetIcon ? { icon: targetIcon } : {};
-
         const marker = L.marker([store.lat, store.lng], mOpt).addTo(map);
         store.marker = marker; bounds.push([store.lat, store.lng]);
         
