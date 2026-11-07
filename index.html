@@ -2,7 +2,6 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <!-- ↓ スマホでのダブルタップ拡大を地図だけに効かせるための重要設定 ↓ -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ドンキAD MAP</title>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -25,14 +24,16 @@
                 <svg id="search-chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 transition-transform"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
             </div>
             <div id="search-contents" class="space-y-3 hidden mt-3">
+                
+                <!-- 【修正】現在地ボタン（アイコン） ＆ 距離フリー入力 -->
                 <div class="flex gap-2 items-center">
-                    <select id="radius-select" class="stylish-select w-full" onchange="filterMap()">
-                        <option value="">距離指定なし</option>
-                        <option value="5">現在地から 半径 5km以内</option>
-                        <option value="10">現在地から 半径 10km以内</option>
-                        <option value="30">現在地から 半径 30km以内</option>
-                        <option value="50">現在地から 半径 50km以内</option>
-                    </select>
+                    <button onclick="recenterMap()" class="bg-blue-50 text-blue-600 p-2.5 rounded-lg border border-blue-200 shadow-sm active:bg-blue-100 transition-colors" title="現在地に戻る">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
+                    </button>
+                    <div class="flex items-center flex-grow bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
+                        <input type="number" id="radius-input" class="w-full bg-transparent px-3 py-2.5 text-sm outline-none text-gray-800" placeholder="距離を入力" oninput="filterMap()">
+                        <span class="text-xs text-gray-500 font-bold px-3 border-l border-gray-200 whitespace-nowrap bg-gray-100 py-3">km以内</span>
+                    </div>
                 </div>
                 
                 <div class="flex gap-2">
@@ -61,7 +62,6 @@
             <button id="floating-btn" onclick="openModal()">料金、詳細を見る</button>
         </div>
 
-        <!-- 範囲外タップで閉じるための暗い背景 -->
         <div id="modal-overlay" onclick="closeModal()"></div>
 
         <div id="bottom-modal">
