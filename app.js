@@ -59,22 +59,25 @@ function getShortTabName(title) {
     return title.substring(0, 6);
 }
 
-// 【修正】余計な補正（/donkiAD/等の付加）をやめ、シートの記述通りの相対パスをクリーンにして返すように変更
+// 【重要修正】GitHub PagesのどのURL環境から開かれても絶対に画像パスが迷子にならない強力な補正関数
 function fixImageUrl(url) {
     if (!url) return '';
     let cleanUrl = url.trim();
     if (cleanUrl.startsWith('http')) return cleanUrl;
+    if (cleanUrl.startsWith('./')) cleanUrl = cleanUrl.substring(2);
+    if (cleanUrl.startsWith('/')) cleanUrl = cleanUrl.substring(1);
     
-    // スプレッドシート側の記述が /images/... となっていた場合、先頭のスラッシュを削除して
-    // 確実に index.html と同じ階層からの相対パス（images/...）にする
-    if (cleanUrl.startsWith('/')) {
-        cleanUrl = cleanUrl.substring(1);
+    // GitHub Pagesの場合、リポジトリ名（donki-AD）を自動判定して絶対URLを構築する
+    if (window.location.hostname.includes('github.io')) {
+        const pathParts = window.location.pathname.split('/');
+        const repoName = pathParts[1] ? `/${pathParts[1]}/` : '/';
+        return window.location.origin + repoName + cleanUrl;
     }
     return cleanUrl;
 }
 
 let stores = [], products = [], map, icons = {}, activeCategories = [], userLat = null, userLng = null, userMarker = null;
-let defaultIconUrl = '';
+let defaultIconObj = null; // 【追加】未知のカテゴリ用のデフォルトアイコン（専門店）
 
 async function initApp() {
     try {
@@ -88,25 +91,32 @@ async function initApp() {
             if(bannerUrl) { const img = document.getElementById('header-banner'); if(img){ img.src = fixImageUrl(bannerUrl); img.style.display = 'block'; if(bannerLink) img.onclick = () => window.open(bannerLink, '_blank'); } }
         }
         
-        // --- Icon ---
+        // --- Icon（アイコンの生成とデフォルトの確保） ---
         if(iconData && iconData.length > 1) {
             for(let i=1; i<iconData.length; i++) { 
                 if(iconData[i][0] && iconData[i][1]) {
                     const catName = iconData[i][0].trim();
                     const fixedUrl = fixImageUrl(iconData[i][1]);
                     
-                    icons[catName] = L.icon({ 
+                    const iconObj = L.icon({ 
                         iconUrl: fixedUrl, 
                         iconSize: [32, 32], 
                         iconAnchor: [16, 32], 
                         popupAnchor: [0, -32] 
                     });
                     
+                    icons[catName] = iconObj;
+                    
+                    // 「専門店」をデフォルトアイコンとして登録
                     if (catName === '専門店') {
-                        defaultIconUrl = fixedUrl;
+                        defaultIconObj = iconObj;
                     }
                 } 
             }
+        }
+        // もし「専門店」が設定されていなくても、読み込めた一番最初のアイコンを予備のデフォルトにする
+        if (!defaultIconObj && Object.keys(icons).length > 0) {
+            defaultIconObj = icons[Object.keys(icons)[0]];
         }
 
         // --- Prices ---
@@ -191,19 +201,8 @@ async function initApp() {
                 const stat = statusMap[addr] || { updatedAt: '', poster: 'ー', register: 'ー', tissue: 'ー', gate: 'ー', jack: 'ー', unavailable: '' };
                 const locInfo = extractPrefAndCity(addr);
 
-                let cat = cCatCol !== -1 ? row[cCatCol] : '';
-                
-                if (cat && !icons[cat] && defaultIconUrl !== '') {
-                    icons[cat] = L.icon({ 
-                        iconUrl: defaultIconUrl, 
-                        iconSize: [32, 32], 
-                        iconAnchor: [16, 32], 
-                        popupAnchor: [0, -32] 
-                    });
-                }
-
                 stores.push({
-                    name: cNameCol !== -1 ? row[cNameCol] : '', category: cat,
+                    name: cNameCol !== -1 ? row[cNameCol] : '', category: cCatCol !== -1 ? row[cCatCol] : '',
                     pref: locInfo.pref, city: locInfo.city, lat: parseFloat(row[cLatCol]), lng: parseFloat(row[cLngCol]),
                     updatedAt: stat.updatedAt, unavailable: stat.unavailable,
                     records: { tissue: stat.tissue, poster: stat.poster, gate: stat.gate, register: stat.register, jack: stat.jack }, marker: null
@@ -230,7 +229,15 @@ function initMap() {
     const bounds = [];
     stores.forEach(store => {
         if(isNaN(store.lat) || isNaN(store.lng)) return;
-        const mOpt = icons[store.category] ? { icon: icons[store.category] } : {};
+        
+        // 【重要修正】一致するアイコンがなければ、専門店（デフォルト）のアイコンを割り当てる
+        let mOpt = {};
+        if (icons[store.category]) {
+            mOpt = { icon: icons[store.category] };
+        } else if (defaultIconObj) {
+            mOpt = { icon: defaultIconObj };
+        }
+
         const marker = L.marker([store.lat, store.lng], mOpt).addTo(map);
         store.marker = marker; bounds.push([store.lat, store.lng]);
         
@@ -254,7 +261,9 @@ function initMap() {
 }
 
 function getUserLocation(isInit = false) {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) { 
+        if(!isInit) alert("ブラウザが位置情報に未対応です。"); return; 
+    }
     navigator.geolocation.getCurrentPosition(
         (pos) => {
             userLat = pos.coords.latitude; userLng = pos.coords.longitude;
