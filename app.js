@@ -127,17 +127,16 @@ async function initApp() {
         
         initMap(); initModal(); initSearchUI();
 
-        // 起動時に位置情報取得（自動ソートはしない）
+        // 起動時に自動で現在地取得（ソートはしない）
         getUserLocation(true);
 
     } catch(err) { console.error(err); showError("⚠️ システムエラーが発生しました。"); }
 }
 
 function initMap() {
-    map = L.map('map', { tap: false }).setView([35.6895, 139.6917], 5);
+    map = L.map('map', { doubleClickZoom: true, tap: false }).setView([35.6895, 139.6917], 5);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(map);
     
-    // 【改善】地図を触ったら検索パネルを自動で閉じる
     map.on('click', () => { if(searchOpen) toggleSearch(); });
     map.on('dragstart', () => { if(searchOpen) toggleSearch(); });
 
@@ -168,26 +167,38 @@ function initMap() {
 }
 
 function getUserLocation(isInit = false) {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) { 
+        if(!isInit) alert("ブラウザが位置情報に未対応です。"); return; 
+    }
     navigator.geolocation.getCurrentPosition(
         (pos) => {
             userLat = pos.coords.latitude; userLng = pos.coords.longitude;
             if(userMarker) map.removeLayer(userMarker);
+            
             const userIcon = L.divIcon({ className: 'custom-user-marker', html: '<div class="user-pulse"></div>', iconSize: [20, 20], iconAnchor: [10, 10] });
             userMarker = L.marker([userLat, userLng], {icon: userIcon}).addTo(map).bindPopup("<b style='font-size:12px;'>現在地</b>");
             
             if(isInit) {
-                // 起動時はピンを刺してそこを見るだけ（ソートはしない）
-                map.setView([userLat, userLng], 9);
+                // 起動時は現在地を中心に表示するだけ（距離による絞り込みを行わない）
+                map.setView([userLat, userLng], 10); 
             } else {
-                // 「現在地から」を選んだ場合は10kmでソート
+                // 明示的に取得した場合はズームする
                 map.setView([userLat, userLng], 12); 
-                document.getElementById('radius-select').value = "10"; 
-                filterMap();
             }
         }, 
-        (err) => { console.warn("位置取得失敗"); }
+        (err) => { 
+            if(!isInit) alert("位置取得に失敗しました。スマホの設定をご確認ください。"); 
+        }
     );
+}
+
+// アイコンボタン用の再センター化機能
+window.recenterMap = function() {
+    if(userLat && userLng) {
+        map.setView([userLat, userLng], 12);
+    } else {
+        getUserLocation(false);
+    }
 }
 
 function initSearchUI() {
@@ -219,13 +230,20 @@ window.updateCities = function() {
 
 window.filterMap = function() {
     const sPref = document.getElementById('pref-select').value, sCity = document.getElementById('city-select').value;
-    const sUnav = document.getElementById('show-unavailable').checked, rVal = document.getElementById('radius-select').value;
+    const sUnav = document.getElementById('show-unavailable').checked;
+    const rVal = document.getElementById('radius-input').value; // 入力フォームから取得
+    
     stores.forEach(s => {
         if(!s.marker) return; let v = true;
         if(sPref && s.pref !== sPref) v = false; if(sCity && s.city !== sCity) v = false;
         if(activeCategories.length > 0 && !activeCategories.includes(s.category)) v = false;
         if(!sUnav && s.unavailable !== '') v = false;
-        if(rVal && userLat && userLng) { if(getDistance(userLat, userLng, s.lat, s.lng) > parseFloat(rVal)) v = false; }
+        
+        // 距離が入力されていて、かつ現在地が取得できている場合のみ絞り込む
+        if(rVal && userLat && userLng) { 
+            if(getDistance(userLat, userLng, s.lat, s.lng) > parseFloat(rVal)) v = false; 
+        }
+        
         if(v) { if(!map.hasLayer(s.marker)) s.marker.addTo(map); } else { if(map.hasLayer(s.marker)) map.removeLayer(s.marker); }
     });
 }
@@ -253,7 +271,6 @@ function renderModalContent(index) {
     let optsHtml = prod.options.map((opt, i) => `<option value="${i}">${opt.label}</option>`).join('');
     const content = document.getElementById('modal-content');
     
-    // 【改善】タイトルの折り返しを綺麗に
     content.innerHTML = `
         <h2 class="text-[17px] font-bold mb-4 leading-snug text-gray-800">${prod.title || ''}</h2>
         ${prod.imageUrl ? `<img src="${prod.imageUrl}" class="product-image" alt="Product Image">` : ''}
