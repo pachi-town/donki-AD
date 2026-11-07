@@ -25,14 +25,17 @@
             </div>
             <div id="search-contents" class="space-y-3 hidden mt-3">
                 <div class="flex items-center w-full bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
-                    <input type="number" id="radius-input" class="w-full bg-transparent px-3 py-2.5 text-sm outline-none text-gray-800" placeholder="現在地からの距離を入力" oninput="filterMap()">
+                    <input type="number" id="radius-input" class="w-full bg-transparent px-3 py-2.5 text-sm outline-none text-gray-800" placeholder="現在地からの距離を入力" inputmode="decimal" onkeydown="if(event.key==='Enter'){applySearch(); this.blur();}">
                     <span class="text-xs text-gray-500 font-bold px-3 border-l border-gray-200 whitespace-nowrap bg-gray-100 py-3">km以内</span>
                 </div>
                 
                 <div class="flex gap-2">
-                    <select id="pref-select" class="stylish-select w-1/2" onchange="updateCities(); filterMap();"><option value="">都道府県</option></select>
-                    <select id="city-select" class="stylish-select w-1/2" onchange="filterMap();"><option value="">市区町村</option></select>
+                    <select id="pref-select" class="stylish-select w-1/2" onchange="updateCities();"><option value="">都道府県</option></select>
+                    <select id="city-select" class="stylish-select w-1/2"><option value="">市区町村</option></select>
                 </div>
+
+                <!-- 距離・都道府県・市区町村をまとめて反映する決定ボタン -->
+                <button type="button" id="apply-btn" onclick="applySearch()">決定</button>
 
                 <div class="flex gap-2 overflow-x-auto pb-1 items-center" id="category-filters" style="-webkit-overflow-scrolling: touch;"></div>
                 
@@ -42,7 +45,7 @@
                     </label>
                     <span class="font-bold text-gray-700 text-sm">掲載不可店舗も表示する</span>
                     <!-- 検索条件をすべて初期状態に戻すボタン -->
-                    <button type="button" id="reset-btn" onclick="resetFilters()">↺ リセット</button>
+                    <button type="button" id="reset-btn" onclick="resetFilters()">リセット</button>
                 </div>
             </div>
         </div>

@@ -45,19 +45,29 @@ input:checked + .slider:before { transform: translateX(20px); }
 
 #modal-overlay { position: absolute; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.5); z-index: 1900; opacity: 0; visibility: hidden; transition: 0.3s; }
 #modal-overlay.show { opacity: 1; visibility: visible; }
-#bottom-modal { position: absolute; bottom: -100%; left: 0; width: 100%; height: 75dvh; background: #fff; border-radius: 20px 20px 0 0; box-shadow: 0 -5px 20px rgba(0,0,0,0.2); transition: bottom 0.3s cubic-bezier(0.3, 0, 0, 1); z-index: 2000; display: flex; flex-direction: column; }
+#bottom-modal { position: absolute; bottom: -100%; left: 0; width: 100%; height: 88dvh; background: #fff; border-radius: 20px 20px 0 0; box-shadow: 0 -5px 20px rgba(0,0,0,0.2); transition: bottom 0.3s cubic-bezier(0.3, 0, 0, 1); z-index: 2000; display: flex; flex-direction: column; }
 #bottom-modal.open { bottom: 0; }
-.modal-handle { width: 40px; height: 5px; background: #e5e7eb; border-radius: 3px; margin: 12px auto; flex-shrink: 0; }
-/* 商材タブ: 3列の等幅グリッド(幅・高さが揃ってバランス良く、横スクロール不要) */
-.modal-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 2px 16px 14px; border-bottom: 1px solid #f3f4f6; flex-shrink: 0; }
-.modal-tab { display: flex; align-items: center; justify-content: center; height: 38px; padding: 0 4px; font-size: 12px; font-weight: 600; white-space: nowrap; color: #6b7280; background: #f3f4f6; border: none; border-radius: 10px; cursor: pointer; transition: background .2s, color .2s, transform .1s, box-shadow .2s; }
+.modal-handle { width: 40px; height: 5px; background: #e5e7eb; border-radius: 3px; margin: 10px auto 8px; flex-shrink: 0; }
+/* 商材タブ: 3列の等幅グリッド(小さめ・横スクロール不要) */
+.modal-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 2px 14px 10px; border-bottom: 1px solid #f3f4f6; flex-shrink: 0; }
+.modal-tab { display: flex; align-items: center; justify-content: center; height: 32px; padding: 0 4px; font-size: 11px; font-weight: 600; white-space: nowrap; color: #6b7280; background: #f3f4f6; border: none; border-radius: 10px; cursor: pointer; transition: background .2s, color .2s, transform .1s, box-shadow .2s; }
 .modal-tab:active { transform: scale(0.96); }
-.modal-tab.active { color: #facc15; background: #111; box-shadow: 0 3px 8px rgba(0,0,0,0.25); }
+.modal-tab.active { color: #facc15; background: #111; box-shadow: 0 2px 6px rgba(0,0,0,0.22); }
 .modal-content { padding: 20px; overflow-y: auto; flex-grow: 1; }
 
 #error-banner { display: none; background: #fee2e2; color: #dc2626; padding: 10px; text-align: center; font-size: 12px; font-weight: bold; z-index: 3000; }
 .product-image { width: 100%; height: 160px; object-fit: cover; border-radius: 10px; margin-bottom: 12px; background-color: #f3f4f6; }
 
 /* 検索リセットボタン */
-#reset-btn { margin-left: auto; flex-shrink: 0; padding: 7px 14px; font-size: 12px; font-weight: 700; color: #374151; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 999px; cursor: pointer; white-space: nowrap; transition: 0.2s; }
-#reset-btn:active { background: #e5e7eb; transform: scale(0.95); }
+#reset-btn { margin-left: auto; flex-shrink: 0; height: 32px; padding: 0 14px; font-size: 12px; font-weight: 700; color: #374151; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 10px; cursor: pointer; white-space: nowrap; transition: 0.2s; }
+#reset-btn:active { background: #e5e7eb; transform: scale(0.96); }
+
+/* 決定ボタン(商材情報ボタンと同じ 黒+黄 の配色) */
+#apply-btn { width: 100%; height: 42px; font-size: 14px; font-weight: 700; color: #facc15; background: #111; border: none; border-radius: 10px; cursor: pointer; transition: 0.2s; }
+#apply-btn:active { transform: scale(0.98); }
+
+/* カテゴリボタン(商材タブと同じ形で、控えめな配色) */
+.cat-all, .cat-chip { flex-shrink: 0; height: 30px; padding: 0 12px; font-size: 11px; font-weight: 600; white-space: nowrap; border-radius: 10px; cursor: pointer; transition: background .2s, color .2s, border-color .2s; }
+.cat-all { color: #6b7280; background: #fff; border: 1px solid #e5e7eb; }
+.cat-chip { color: #9ca3af; background: #f3f4f6; border: 1px solid transparent; }
+.cat-chip.active { color: #111; background: #fffbe6; border-color: #facc15; }
