@@ -4,15 +4,11 @@ const PREF_ORDER = ["北海道","青森県","岩手県","宮城県","秋田県",
 function showError(msg) { const eb = document.getElementById('error-banner'); if(eb){ eb.innerText = msg; eb.style.display = 'block'; } }
 
 async function fetchCSV(sheetName) {
-    // 【重要修正】URLの末尾に「&_t=現在時刻」をつけて、ブラウザに毎回違うURLだと思わせて強制的に最新データを取得させる（キャッシュ対策）
     const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}&_t=${new Date().getTime()}`;
     try { 
-        // fetchにもキャッシュ無効化のオプションを付与
         const res = await fetch(url, { cache: 'no-store' }); 
         if (!res.ok) return []; 
         const text = await res.text(); 
-        
-        // 万が一Googleのログイン画面やエラーHTMLが返ってきた場合は弾く
         if(text.trim().startsWith('<')) return [];
         return parseCSV(text); 
     } 
@@ -53,7 +49,6 @@ function getDistance(lat1, lon1, lat2, lon2) {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); return R * c;
 }
 
-// 商材タイトルから短いタブ名を自動生成する関数
 function getShortTabName(title) {
     if (!title) return '詳細';
     if (title.includes('ティッシュ手渡し') || title.includes('ポケットティッシュ')) return 'ティッシュ手渡し';
@@ -84,11 +79,9 @@ async function initApp() {
         if(pricesData && pricesData.length > 0) {
             let pHead = pricesData[0];
             let startIdx = 1;
-            // ヘッダーが1行目にない場合への対策
             for(let i=0; i<Math.min(5, pricesData.length); i++) {
                 if(pricesData[i].join('').includes('商材名')) { pHead = pricesData[i]; startIdx = i + 1; break; }
             }
-
             const pTitle = getColIndex(pHead, ['商材名']) !== -1 ? getColIndex(pHead, ['商材名']) : 0;
             const pOpt = getColIndex(pHead, ['数量']) !== -1 ? getColIndex(pHead, ['数量']) : 1;
             const pPrice = getColIndex(pHead, ['料金']) !== -1 ? getColIndex(pHead, ['料金']) : 2;
@@ -108,10 +101,9 @@ async function initApp() {
             }
         }
 
-        // 予備データ（スプシが空の場合用）
         if(products.length === 0) {
             products = [
-                { title: 'CMボックスティッシュ販売', point: 'ドン・キホーテ店内にてオリジナルティッシュを販売していただく事が可能です！', imageUrl: '', options: [{label: '1,008個', price: '934,270円', note: '自社デザインの場合 -30,000円'}] },
+                { title: 'CMボックスティッシュ販売', point: 'ドン・キホーテ店内にて販売可能です！', imageUrl: '', options: [{label: '1,008個', price: '934,270円', note: '自社デザインの場合 -30,000円'}] },
                 { title: 'ポスター掲示（A1サイズ）', point: '店舗内にてポスターを掲示致します。', imageUrl: '', options: [{label: '1ヶ月間', price: '40,000円', note: 'DMMにて作成の場合 +30,000円'}] }
             ];
         }
@@ -168,7 +160,12 @@ async function initApp() {
             }
         }
         
-        initMap(); initSearchUI();
+        initMap(); 
+        initSearchUI();
+        
+        // 【重要】前回消してしまった料金タブの初期化処理を復活
+        initModal();
+
         getUserLocation(true);
 
     } catch(err) { console.error(err); showError("⚠️ システムエラーが発生しました。"); }
@@ -208,9 +205,7 @@ function initMap() {
 }
 
 function getUserLocation(isInit = false) {
-    if (!navigator.geolocation) { 
-        if(!isInit) alert("ブラウザが位置情報に未対応です。"); return; 
-    }
+    if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
         (pos) => {
             userLat = pos.coords.latitude; userLng = pos.coords.longitude;
@@ -221,7 +216,7 @@ function getUserLocation(isInit = false) {
             
             if(isInit) { map.setView([userLat, userLng], 10); } else { map.setView([userLat, userLng], 12); }
         }, 
-        (err) => { if(!isInit) alert("位置取得に失敗しました。スマホの設定をご確認ください。"); }
+        (err) => { console.warn("位置取得に失敗しました"); }
     );
 }
 
@@ -310,14 +305,16 @@ function initModal() {
     tabs.innerHTML = '';
     products.forEach((p, i) => {
         const t = document.createElement('div'); t.className = `modal-tab ${i === 0 ? 'active' : ''}`; 
-        // 【修正】商材名から動的に短いタブ名を作成
         t.innerText = getShortTabName(p.title);
         t.onclick = () => selectTab(i); tabs.appendChild(t);
     });
     if(products.length > 0) renderModalContent(0);
 }
 
-function selectTab(index) { document.querySelectorAll('.modal-tab').forEach((t, i) => { t.className = `modal-tab ${i === index ? 'active' : ''}`; }); renderModalContent(index); }
+function selectTab(index) { 
+    document.querySelectorAll('.modal-tab').forEach((t, i) => { t.className = `modal-tab ${i === index ? 'active' : ''}`; }); 
+    renderModalContent(index); 
+}
 
 function renderModalContent(index) {
     const prod = products[index]; if(!prod) return;
@@ -342,7 +339,13 @@ function renderModalContent(index) {
         </div>`;
 }
 
-window.updatePrice = function(pIdx, oIdx) { const opt = products[pIdx].options[oIdx]; if(opt){ const pDisp = document.getElementById('price-display'); const nDisp = document.getElementById('note-display'); if(pDisp) pDisp.innerText = opt.price; if(nDisp) nDisp.innerText = opt.note; } }
+window.updatePrice = function(pIdx, oIdx) { 
+    const opt = products[pIdx].options[oIdx]; 
+    if(opt){ 
+        const pDisp = document.getElementById('price-display'); const nDisp = document.getElementById('note-display'); 
+        if(pDisp) pDisp.innerText = opt.price; if(nDisp) nDisp.innerText = opt.note; 
+    } 
+}
 
 function openModal() { 
     const bm = document.getElementById('bottom-modal'); const mo = document.getElementById('modal-overlay');
