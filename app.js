@@ -1,7 +1,7 @@
 const SHEET_ID = '1wo0qLk-eYag_tqp-kZwE6CpNdFACwPWTtFCroxHdk1s';
 const PREF_ORDER = ["北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県","茨城県","栃木県","群馬県","埼玉県","千葉県","東京都","神奈川県","新潟県","富山県","石川県","福井県","山梨県","長野県","岐阜県","静岡県","愛知県","三重県","滋賀県","京都府","大阪府","兵庫県","奈良県","和歌山県","鳥取県","島根県","岡山県","広島県","山口県","徳島県","香川県","愛媛県","高知県","福岡県","佐賀県","長崎県","熊本県","大分県","宮崎県","鹿児島県","沖縄県"];
 
-function showError(msg) { const eb = document.getElementById('error-banner'); eb.innerText = msg; eb.style.display = 'block'; }
+function showError(msg) { const eb = document.getElementById('error-banner'); if(eb){ eb.innerText = msg; eb.style.display = 'block'; } }
 async function fetchCSV(sheetName) {
     const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
     try { const res = await fetch(url); if (!res.ok) return []; const text = await res.text(); return parseCSV(text); } 
@@ -50,7 +50,7 @@ async function initApp() {
 
         if(bannerData && bannerData.length > 1) {
             const bannerUrl = bannerData[1][0]; const bannerLink = bannerData[1][1];
-            if(bannerUrl) { const img = document.getElementById('header-banner'); img.src = bannerUrl; img.style.display = 'block'; if(bannerLink) img.onclick = () => window.open(bannerLink, '_blank'); }
+            if(bannerUrl) { const img = document.getElementById('header-banner'); if(img){ img.src = bannerUrl; img.style.display = 'block'; if(bannerLink) img.onclick = () => window.open(bannerLink, '_blank'); } }
         }
         if(iconData && iconData.length > 1) {
             for(let i=1; i<iconData.length; i++) { if(iconData[i][0] && iconData[i][1]) icons[iconData[i][0]] = L.icon({ iconUrl: iconData[i][1], iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32] }); }
@@ -126,8 +126,6 @@ async function initApp() {
         }
         
         initMap(); initModal(); initSearchUI();
-
-        // 起動時に自動で現在地取得（ソートはしない）
         getUserLocation(true);
 
     } catch(err) { console.error(err); showError("⚠️ システムエラーが発生しました。"); }
@@ -179,10 +177,8 @@ function getUserLocation(isInit = false) {
             userMarker = L.marker([userLat, userLng], {icon: userIcon}).addTo(map).bindPopup("<b style='font-size:12px;'>現在地</b>");
             
             if(isInit) {
-                // 起動時は現在地を中心に表示するだけ（距離による絞り込みを行わない）
                 map.setView([userLat, userLng], 10); 
             } else {
-                // 明示的に取得した場合はズームする
                 map.setView([userLat, userLng], 12); 
             }
         }, 
@@ -192,7 +188,6 @@ function getUserLocation(isInit = false) {
     );
 }
 
-// アイコンボタン用の再センター化機能
 window.recenterMap = function() {
     if(userLat && userLng) {
         map.setView([userLat, userLng], 12);
@@ -205,22 +200,26 @@ function initSearchUI() {
     const rawPrefs = [...new Set(stores.map(s => s.pref).filter(Boolean))];
     rawPrefs.sort((a, b) => { let ia = PREF_ORDER.indexOf(a); let ib = PREF_ORDER.indexOf(b); if(ia === -1) ia = 999; if(ib === -1) ib = 999; return ia - ib; });
     const pSel = document.getElementById('pref-select');
-    rawPrefs.forEach(p => { const opt = document.createElement('option'); opt.value = p; opt.textContent = p; pSel.appendChild(opt); });
+    if(pSel) { rawPrefs.forEach(p => { const opt = document.createElement('option'); opt.value = p; opt.textContent = p; pSel.appendChild(opt); }); }
     
     const catCont = document.getElementById('category-filters');
     const cats = [...new Set(stores.map(s => s.category).filter(Boolean))];
-    cats.forEach(cat => {
-        const span = document.createElement('span'); span.className = 'bg-gray-100 border border-gray-200 px-4 py-1.5 rounded-full text-xs whitespace-nowrap cursor-pointer transition-colors'; span.textContent = cat;
-        span.onclick = () => {
-            if(activeCategories.includes(cat)) { activeCategories = activeCategories.filter(c => c !== cat); span.classList.replace('bg-yellow-400', 'bg-gray-100'); span.classList.remove('font-bold', 'border-yellow-400'); } 
-            else { activeCategories.push(cat); span.classList.replace('bg-gray-100', 'bg-yellow-400'); span.classList.add('font-bold', 'border-yellow-400'); }
-            filterMap();
-        }; catCont.appendChild(span);
-    });
+    if(catCont) {
+        cats.forEach(cat => {
+            const span = document.createElement('span'); span.className = 'bg-gray-100 border border-gray-200 px-4 py-1.5 rounded-full text-xs whitespace-nowrap cursor-pointer transition-colors'; span.textContent = cat;
+            span.onclick = () => {
+                if(activeCategories.includes(cat)) { activeCategories = activeCategories.filter(c => c !== cat); span.classList.replace('bg-yellow-400', 'bg-gray-100'); span.classList.remove('font-bold', 'border-yellow-400'); } 
+                else { activeCategories.push(cat); span.classList.replace('bg-gray-100', 'bg-yellow-400'); span.classList.add('font-bold', 'border-yellow-400'); }
+                filterMap();
+            }; catCont.appendChild(span);
+        });
+    }
 }
 
 window.updateCities = function() {
-    const sPref = document.getElementById('pref-select').value; const cSel = document.getElementById('city-select'); cSel.innerHTML = '<option value="">市区町村を選択</option>';
+    const pSel = document.getElementById('pref-select'); const cSel = document.getElementById('city-select');
+    if(!pSel || !cSel) return;
+    const sPref = pSel.value; cSel.innerHTML = '<option value="">市区町村を選択</option>';
     if(sPref) {
         const cities = [...new Set(stores.filter(s => s.pref === sPref).map(s => s.city).filter(Boolean))];
         cities.sort((a, b) => a.localeCompare(b, 'ja'));
@@ -229,9 +228,11 @@ window.updateCities = function() {
 }
 
 window.filterMap = function() {
-    const sPref = document.getElementById('pref-select').value, sCity = document.getElementById('city-select').value;
-    const sUnav = document.getElementById('show-unavailable').checked;
-    const rVal = document.getElementById('radius-input').value; // 入力フォームから取得
+    // 要素が見つからなくてもエラーにしないための安全取得
+    const elPref = document.getElementById('pref-select'); const sPref = elPref ? elPref.value : '';
+    const elCity = document.getElementById('city-select'); const sCity = elCity ? elCity.value : '';
+    const elUnav = document.getElementById('show-unavailable'); const sUnav = elUnav ? elUnav.checked : true;
+    const elRad = document.getElementById('radius-input'); const rVal = elRad ? elRad.value : '';
     
     stores.forEach(s => {
         if(!s.marker) return; let v = true;
@@ -239,7 +240,6 @@ window.filterMap = function() {
         if(activeCategories.length > 0 && !activeCategories.includes(s.category)) v = false;
         if(!sUnav && s.unavailable !== '') v = false;
         
-        // 距離が入力されていて、かつ現在地が取得できている場合のみ絞り込む
         if(rVal && userLat && userLng) { 
             if(getDistance(userLat, userLng, s.lat, s.lng) > parseFloat(rVal)) v = false; 
         }
@@ -251,12 +251,13 @@ window.filterMap = function() {
 let searchOpen = false;
 function toggleSearch() {
     searchOpen = !searchOpen; const panel = document.getElementById('search-contents'), chev = document.getElementById('search-chevron');
-    if(searchOpen) { panel.classList.remove('hidden'); chev.style.transform = 'rotate(180deg)'; } 
-    else { panel.classList.add('hidden'); chev.style.transform = 'rotate(0deg)'; }
+    if(searchOpen) { if(panel) panel.classList.remove('hidden'); if(chev) chev.style.transform = 'rotate(180deg)'; } 
+    else { if(panel) panel.classList.add('hidden'); if(chev) chev.style.transform = 'rotate(0deg)'; }
 }
 
 function initModal() {
-    const tabs = document.getElementById('modal-tabs'); tabs.innerHTML = '';
+    const tabs = document.getElementById('modal-tabs'); if(!tabs) return;
+    tabs.innerHTML = '';
     products.forEach((p, i) => {
         const t = document.createElement('div'); t.className = `modal-tab ${i === 0 ? 'active' : ''}`; t.innerText = productTabs[i] || (p.title?p.title.substring(0,6):'詳細');
         t.onclick = () => selectTab(i); tabs.appendChild(t);
@@ -269,7 +270,7 @@ function selectTab(index) { document.querySelectorAll('.modal-tab').forEach((t, 
 function renderModalContent(index) {
     const prod = products[index]; if(!prod) return;
     let optsHtml = prod.options.map((opt, i) => `<option value="${i}">${opt.label}</option>`).join('');
-    const content = document.getElementById('modal-content');
+    const content = document.getElementById('modal-content'); if(!content) return;
     
     content.innerHTML = `
         <h2 class="text-[17px] font-bold mb-4 leading-snug text-gray-800">${prod.title || ''}</h2>
@@ -289,15 +290,15 @@ function renderModalContent(index) {
         </div>`;
 }
 
-window.updatePrice = function(pIdx, oIdx) { const opt = products[pIdx].options[oIdx]; if(opt){ document.getElementById('price-display').innerText = opt.price; document.getElementById('note-display').innerText = opt.note; } }
+window.updatePrice = function(pIdx, oIdx) { const opt = products[pIdx].options[oIdx]; if(opt){ const pDisp = document.getElementById('price-display'); const nDisp = document.getElementById('note-display'); if(pDisp) pDisp.innerText = opt.price; if(nDisp) nDisp.innerText = opt.note; } }
 
 function openModal() { 
-    document.getElementById('bottom-modal').classList.add('open'); 
-    document.getElementById('modal-overlay').classList.add('show');
+    const bm = document.getElementById('bottom-modal'); const mo = document.getElementById('modal-overlay');
+    if(bm) bm.classList.add('open'); if(mo) mo.classList.add('show');
 }
 function closeModal() { 
-    document.getElementById('bottom-modal').classList.remove('open'); 
-    document.getElementById('modal-overlay').classList.remove('show');
+    const bm = document.getElementById('bottom-modal'); const mo = document.getElementById('modal-overlay');
+    if(bm) bm.classList.remove('open'); if(mo) mo.classList.remove('show');
 }
 
 window.onload = initApp;
