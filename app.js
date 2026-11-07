@@ -62,6 +62,53 @@ function getShortTabName(title) {
 let stores = [], products = [], map, icons = {}, activeCategories = [], userLat = null, userLng = null, userMarker = null;
 let defaultIconObj = null;
 
+// ==== ピン画像の探索設定 ====
+// 画像フォルダ(index.htmlからの相対パス)。GitHub上の images/pin に合わせてあります
+const PIN_DIR = './images/pin/';
+const missingPins = []; // 見つからなかった画像の記録(画面上のエラーバナーに表示)
+
+// 画像が全部見つからなかった時に出す代替ピン(黄色い丸)
+function makeFallbackIcon() {
+    return L.divIcon({
+        className: '',
+        html: '<div style="width:28px;height:28px;border-radius:50%;background:#facc15;border:3px solid #111;box-shadow:0 2px 6px rgba(0,0,0,.4)"></div>',
+        iconSize: [28, 28], iconAnchor: [14, 28], popupAnchor: [0, -28]
+    });
+}
+
+// 指定URLの画像が実際に読めるか確認する
+function canLoadImage(url) {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => resolve(true);
+        img.onerror = () => resolve(false);
+        img.src = url;
+    });
+}
+
+// シートのパスからファイル名だけ取り出し、複数の候補を順に試す
+async function resolvePinIcon(rawUrl) {
+    // 見えない文字(ゼロ幅スペース等)や前後の空白を除去
+    const cleaned = rawUrl.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+    const fileName = cleaned.split('/').pop();
+    const candidates = [
+        cleaned,                  // シートに書かれたまま
+        PIN_DIR + fileName,       // ./images/pin/pin-mega.png
+        './' + fileName,          // index.htmlと同じ階層
+        './pin/' + fileName,
+        './images/' + fileName
+    ];
+    for (const url of candidates) {
+        if (await canLoadImage(url)) {
+            console.log('✅ ピン画像OK:', url);
+            return L.icon({ iconUrl: url, iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32] });
+        }
+    }
+    console.warn('❌ ピン画像が見つかりません:', cleaned, '→ 試した場所:', candidates);
+    missingPins.push(fileName);
+    return makeFallbackIcon();
+}
+
 async function initApp() {
     try {
         const [coordsData, statusData, pricesData, iconData, bannerData] = await Promise.all([
@@ -79,24 +126,19 @@ async function initApp() {
             }
         }
         
-        // --- Icon（スプレッドシートのパスを一文字も変えずにセットする） ---
+        // --- Icon(複数の候補パスを試して、読める画像を使う) ---
         if(iconData && iconData.length > 1) {
-            for(let i=1; i<iconData.length; i++) { 
+            for(let i=1; i<iconData.length; i++) {
                 if(iconData[i][0] && iconData[i][1]) {
                     const catName = iconData[i][0].trim();
-                    const rawUrl = iconData[i][1].trim(); // 例: "./images/pin/pin-mega.png" をそのまま使う
-                    
-                    const iconObj = L.icon({ 
-                        iconUrl: rawUrl, 
-                        iconSize: [32, 32], 
-                        iconAnchor: [16, 32], 
-                        popupAnchor: [0, -32] 
-                    });
-                    
+                    const iconObj = await resolvePinIcon(iconData[i][1]);
                     icons[catName] = iconObj;
                     if (catName === '専門店') { defaultIconObj = iconObj; }
-                } 
+                }
             }
+        }
+        if (missingPins.length > 0) {
+            showError("⚠️ ピン画像が見つかりません: " + [...new Set(missingPins)].join(', ') + "(GitHubの images/pin を確認)");
         }
         if (!defaultIconObj && Object.keys(icons).length > 0) { defaultIconObj = icons[Object.keys(icons)[0]]; }
 
