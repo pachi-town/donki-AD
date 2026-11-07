@@ -58,7 +58,6 @@
             </button>
         </div>
 
-        <!-- 【重要修正】地図のレンダリングに影響されないよう、一番上の階層にボタンを配置 -->
         <button id="floating-btn" onclick="openModal()">商材情報・料金を見る</button>
 
         <div id="modal-overlay" onclick="closeModal()"></div>
@@ -69,6 +68,7 @@
             <div class="modal-content" id="modal-content"></div>
         </div>
     </div>
-    <script src="app.js"></script>
+    <!-- 【重要】ブラウザのキャッシュを強制的に破棄させる魔法の記述 -->
+    <script src="app.js?v=update1"></script>
 </body>
 </html>
