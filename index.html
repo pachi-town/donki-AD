@@ -25,7 +25,7 @@
             </div>
             <div id="search-contents" class="space-y-3 hidden">
                 <div class="flex gap-2 items-center">
-                    <button onclick="getUserLocation()" class="bg-blue-600 text-white px-3 py-2 rounded text-sm font-bold flex-shrink-0">📍現在地から</button>
+                    <button id="btn-geolocation" onclick="getUserLocation(false)" class="bg-blue-600 text-white px-3 py-2 rounded text-sm font-bold flex-shrink-0">📍現在地から</button>
                     <select id="radius-select" class="border rounded p-2 text-sm flex-grow" onchange="filterMap()">
                         <option value="">距離指定なし</option>
                         <option value="5">半径 5km以内</option>
@@ -34,12 +34,23 @@
                         <option value="50">半径 50km以内</option>
                     </select>
                 </div>
-                <select id="pref-select" class="w-full border rounded p-2 text-sm" onchange="updateCities(); filterMap();"><option value="">都道府県を選択</option></select>
-                <select id="city-select" class="w-full border rounded p-2 text-sm" onchange="filterMap();"><option value="">市区町村を選択</option></select>
+                
+                <select id="pref-select" class="w-full border rounded p-2 text-sm" onchange="updateCities(); filterMap();">
+                    <option value="">都道府県を選択</option>
+                </select>
+                <select id="city-select" class="w-full border rounded p-2 text-sm" onchange="filterMap();">
+                    <option value="">市区町村を選択</option>
+                </select>
                 <div class="flex gap-2 overflow-x-auto pb-1" id="category-filters"></div>
-                <label class="flex items-center gap-2 text-sm">
-                    <input type="checkbox" id="show-unavailable" checked onchange="filterMap();"> 掲載不可店舗も表示する
-                </label>
+                
+                <!-- トグルスイッチ化 -->
+                <div class="toggle-wrapper">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="show-unavailable" checked onchange="filterMap();">
+                        <span class="slider"></span>
+                    </label>
+                    <span class="font-bold text-gray-700">掲載不可店舗も表示する</span>
+                </div>
             </div>
         </div>
 
