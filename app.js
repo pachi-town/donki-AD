@@ -65,6 +65,8 @@ let defaultIconObj = null;
 // ==== ピン画像の探索設定 ====
 // 画像フォルダ(index.htmlからの相対パス)。GitHub上の images/pin に合わせてあります
 const PIN_DIR = './images/pin/';
+const RAW_BASE = 'https://raw.githubusercontent.com/pachi-town/donki-AD/main/images/pin/';
+const CDN_BASE = 'https://cdn.jsdelivr.net/gh/pachi-town/donki-AD@main/images/pin/';
 const missingPins = []; // 見つからなかった画像の記録(画面上のエラーバナーに表示)
 
 // 画像が全部見つからなかった時に出す代替ピン(黄色い丸)
@@ -96,7 +98,10 @@ async function resolvePinIcon(rawUrl) {
         PIN_DIR + fileName,       // ./images/pin/pin-mega.png
         './' + fileName,          // index.htmlと同じ階層
         './pin/' + fileName,
-        './images/' + fileName
+        './images/' + fileName,
+        // GitHub Pagesで404になる場合の保険(リポジトリのファイルを直接読む)
+        RAW_BASE + fileName,
+        CDN_BASE + fileName
     ];
     for (const url of candidates) {
         if (await canLoadImage(url)) {
