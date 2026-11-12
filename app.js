@@ -3,7 +3,10 @@ const PREF_ORDER = ["北海道","青森県","岩手県","宮城県","秋田県",
 const DEFAULT_VIEW = 'map';
 const PAGE_SIZE = 50;
 
-function showError(msg) { const eb = document.getElementById('error-banner'); if(eb){ eb.innerText = msg; eb.style.display = 'block'; } }
+function showError(msg) { 
+    const eb = document.getElementById('error-banner'); 
+    if(eb){ eb.innerText = msg; eb.style.display = 'block'; } 
+}
 
 async function fetchCSV(sheetName) {
     const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}&_t=${new Date().getTime()}`;
@@ -55,36 +58,33 @@ function getDistance(lat1, lon1, lat2, lon2) {
 
 function getShortTabName(title) {
     if (!title) return '詳細';
-    if (title.includes('手渡し') || title.includes('ポケット')) return 'ティッシュ手渡し';
-    if (title.includes('ボックス') || title.includes('BOX')) return 'BOXティッシュ';
-    if (title.includes('ポスター')) return 'ポスター';
-    if (title.includes('ゲート')) return 'ゲート';
-    if (title.includes('ジャック') || title.includes('装飾')) return '店舗ジャック';
+    if (title.indexOf('手渡し') !== -1 || title.indexOf('ポケット') !== -1) return 'ティッシュ手渡し';
+    if (title.indexOf('ボックス') !== -1 || title.indexOf('BOX') !== -1) return 'BOXティッシュ';
+    if (title.indexOf('ポスター') !== -1) return 'ポスター';
+    if (title.indexOf('ゲート') !== -1) return 'ゲート';
+    if (title.indexOf('ジャック') !== -1 || title.indexOf('装飾') !== -1) return '店舗ジャック';
     return title.substring(0, 6);
 }
 
-function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&', '<': '<', '>': '>', '"': '"', "'": ''' }[c])); }
-function kanjiToNum(s) {
-    const map = { '〇': 0, '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9 };
-    return String(s).replace(/([〇一二三四五六七八九十]+)(?=条|丁目|番|号)/g, m => {
-        if(m.indexOf('十') >= 0) { const [a, b] = m.split('十'); return String((a ? map[a] : 1) * 10 + (b ? map[b] : 0)); }
-        return m.split('').map(c => map[c]).join('');
+// エラーの原因だった特殊処理を排除し、安全に文字をエスケープする
+function esc(v) { 
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) {
+        return { '&': '&', '<': '<', '>': '>', '"': '"', "'": ''' }[c];
     });
 }
+
 function normAddr(s) {
-    let t = kanjiToNum(String(s || '').normalize('NFKC').replace(/\s/g, ''));
-    // 【修正箇所】エラーの原因だった特殊文字を削除し、安全なハイフンだけを残しました
-    t = t.replace(/(\d)[-ー−](\d)/g, '$1-$2');
-    t = t.replace(/丁目|番地|番/g, '-').replace(/号/g, '');
+    let t = String(s || '').normalize('NFKC').replace(/\s/g, '');
+    // 複雑な漢数字変換を廃止し、ハイフン化のみ実施
+    t = t.replace(/ー/g, '-').replace(/−/g, '-');
+    t = t.replace(/丁目/g, '-').replace(/番地/g, '-').replace(/番/g, '-').replace(/号/g, '');
     return t.replace(/-+/g, '-').replace(/-$/, '');
 }
+
 function normText(s) {
-    return String(s || '').normalize('NFKC').toLowerCase()
-        .replace(/[\u3041-\u3096]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60))
-        .replace(/[\s・･-]/g, '');
+    return String(s || '').normalize('NFKC').toLowerCase().replace(/\s/g, '');
 }
 
-// 補正を完全に排除した画像読み込み処理
 function getRawUrl(url) {
     return url ? url.trim() : '';
 }
@@ -155,7 +155,6 @@ async function initApp() {
             products = [{ title: 'データがありません', point: '', imageUrl: '', options: [{label: '-', price: '-', note: '-'}] }];
         }
 
-        // 安全な説明文（ガイド）データのパース処理
         let parsedGuides = { common: { warning: [], flow: [], rule: [] }, items: {} };
         if (guideData && guideData.length > 1) {
             for(let i=1; i<guideData.length; i++) {
@@ -430,290 +429,3 @@ function isStoreVisible(s) {
     if(elUnav && !elUnav.checked && s.unavailable !== '') return false;
     
     if(st.mode === 'region') {
-        if(st.pref && s.pref !== st.pref) return false;
-        if(st.city && s.city !== st.city) return false;
-    } else if(st.mode === 'radius' && st.center) {
-        if(getDistance(st.center.lat, st.center.lng, s.lat, s.lng) > st.radius) return false;
-    }
-    return true;
-}
-
-window.filterMap = function() {
-    stores.forEach(s => {
-        if(!s.marker) return;
-        const v = isStoreVisible(s);
-        if(v) { if(!map.hasLayer(s.marker)) s.marker.addTo(map); } else { if(map.hasLayer(s.marker)) map.removeLayer(s.marker); }
-    });
-    renderStoreList(true);
-}
-
-function toggleSearch() {
-    searchOpen = !searchOpen; const panel = document.getElementById('search-contents'), chev = document.getElementById('search-chevron');
-    if(panel) panel.classList.toggle('hidden', !searchOpen);
-    if(chev) chev.style.transform = searchOpen ? 'rotate(180deg)' : 'rotate(0deg)';
-}
-
-/* ============================================================
- * 動的スケジュール・アコーディオン
- * ============================================================ */
-function calcDynamicSchedule(prodTitle) {
-    let offsetDays = null;
-    if(prodTitle.includes('ポスター')) offsetDays = 21;
-    else if(prodTitle.includes('手渡し') || prodTitle.includes('ポケット')) offsetDays = 30;
-    else if(prodTitle.includes('ゲート')) offsetDays = 45;
-    else if(prodTitle.includes('ボックス') || prodTitle.includes('BOX')) offsetDays = 75;
-
-    const today = new Date();
-    let responseDate = new Date(today);
-    let added = 0;
-    while(added < 5) {
-        responseDate.setDate(responseDate.getDate() + 1);
-        if(responseDate.getDay() !== 0 && responseDate.getDay() !== 6) added++;
-    }
-
-    let materialDate = new Date(responseDate);
-    materialDate.setDate(materialDate.getDate() + 6);
-
-    let publishStr = '案件により都度確認';
-    if(offsetDays !== null) {
-        let minPub = new Date(materialDate);
-        minPub.setDate(minPub.getDate() + offsetDays);
-        if(minPub.getDate() !== 1 && minPub.getDate() !== 16) {
-            if(minPub.getDate() < 16) minPub.setDate(16);
-            else { minPub.setMonth(minPub.getMonth() + 1); minPub.setDate(1); }
-        }
-        publishStr = `${minPub.getMonth()+1}月${minPub.getDate()}日〜`;
-    }
-
-    const fmt = d => `${d.getMonth()+1}/${d.getDate()}(${['日','月','火','水','木','金','土'][d.getDay()]})`;
-    return { today: fmt(today), response: fmt(responseDate), material: fmt(materialDate), publish: publishStr };
-}
-
-function renderGuideDynamic(prod) {
-    const guides = window.__GUIDES;
-    if(!guides || !prod) return '';
-
-    const sched = calcDynamicSchedule(prod.title);
-    let pGuide = { spec: [], note: [] };
-    for(const k in guides.items) {
-        if(prod.title.includes(k)) { pGuide = guides.items[k]; break; }
-    }
-
-    const formatList = (arr) => arr.map(t => `<li class="g-li">${esc(t).replace(/\n/g, '<br>')}</li>`).join('');
-    const warnHtml = guides.common.warning.map(w => `<div class="g-warn-box">${esc(w).replace(/\n/g, '<br>')}</div>`).join('');
-    
-    const timelineHtml = `
-        <div class="g-timeline">
-            <div class="gt-item"><div class="gt-dot"></div><div class="gt-date">${sched.today}</div><div class="gt-text">相談・依頼</div></div>
-            <div class="gt-line"></div>
-            <div class="gt-item"><div class="gt-dot"></div><div class="gt-date">${sched.response}<br><small>目安</small></div><div class="gt-text">開催可否の回答<br><small>(5営業日)</small></div></div>
-            <div class="gt-line"></div>
-            <div class="gt-item"><div class="gt-dot"></div><div class="gt-date">${sched.material}<br><small>目安</small></div><div class="gt-text">素材(デザイン)入稿</div></div>
-            <div class="gt-line"></div>
-            <div class="gt-item hl"><div class="gt-dot"></div><div class="gt-date">${sched.publish}</div><div class="gt-text">最短掲載開始</div></div>
-        </div>
-    `;
-
-    const specHtml = pGuide.spec.length ? `<div class="g-sec-h">仕様・期限</div><ul class="g-ul">${formatList(pGuide.spec)}</ul>` : '';
-    const noteHtml = pGuide.note.length ? `<div class="g-sec-h">注意事項</div><ul class="g-ul">${formatList(pGuide.note)}</ul>` : '';
-    const commonHtml = (guides.common.flow.length || guides.common.rule.length) ? `<div class="g-sec-h">全体の流れ・ルール</div><ul class="g-ul">${formatList([...guides.common.flow, ...guides.common.rule])}</ul>` : '';
-
-    const isOpen = window.innerWidth >= 768 ? 'open' : '';
-
-    return `
-        <div class="g-dynamic-wrap">
-            <div class="g-fast-ans">最短掲載開始目安：<span class="text-red-600 font-bold">${sched.publish}</span></div>
-            <details class="g-accordion" ${isOpen}>
-                <summary>▼ 掲載までのスケジュール・注意事項</summary>
-                <div class="g-acc-content">
-                    ${warnHtml}
-                    ${timelineHtml}
-                    ${specHtml}
-                    ${noteHtml}
-                    ${commonHtml}
-                </div>
-            </details>
-        </div>
-    `;
-}
-
-function initProductZone() {
-    const tabs = document.getElementById('product-tabs'); if(!tabs) return;
-    tabs.innerHTML = '';
-    const n = products.length;
-    tabs.style.gridTemplateColumns = `repeat(${n <= 3 ? Math.max(n, 1) : (n === 4 ? 2 : 3)}, 1fr)`;
-    products.forEach((p, i) => {
-        const t = document.createElement('div'); t.className = `prod-tab ${i === 0 ? 'active' : ''}`;
-        t.innerText = getShortTabName(p.title);
-        t.onclick = () => selectTab(i); tabs.appendChild(t);
-    });
-    if(products.length > 0) renderProductContent(0);
-}
-
-function selectTab(index) {
-    document.querySelectorAll('.prod-tab').forEach((t, i) => { t.className = `prod-tab ${i === index ? 'active' : ''}`; });
-    renderProductContent(index);
-}
-
-function renderProductContent(index) {
-    const prod = products[index]; if(!prod) return;
-    let optsHtml = prod.options.map((opt, i) => `<option value="${i}">${esc(opt.label)}</option>`).join('');
-    const content = document.getElementById('product-content'); if(!content) return;
-
-    content.innerHTML = `
-        <h2 class="text-[17px] font-bold mb-4 leading-snug text-gray-800">${esc(prod.title || '')}</h2>
-        ${prod.imageUrl ? `<img src="${getRawUrl(prod.imageUrl)}" class="product-image" alt="画像" onerror="this.style.display='none'">` : ''}
-        <div class="bg-yellow-50 p-3.5 rounded-lg border border-yellow-200 mb-5"><span class="bg-yellow-400 text-xs font-bold px-2.5 py-1 rounded">POINT</span><p class="text-sm mt-2 text-gray-700">${esc(prod.point || '')}</p></div>
-        <div class="border border-gray-200 rounded-xl p-4 bg-white shadow-sm">
-            <label class="text-xs text-gray-500 font-bold mb-2 block">数量・期間を選択</label>
-            <select id="lot-select" class="stylish-select w-full mb-4 bg-gray-50" onchange="updatePrice(${index}, this.value)">${optsHtml}</select>
-            <div class="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                <div class="text-xs text-gray-500 font-bold mb-1">料金</div>
-                <div class="text-3xl font-bold mb-2 text-gray-900">
-                    <span id="price-display">${esc(prod.options[0]?.price || '')}</span>
-                    <span class="text-sm font-normal text-gray-500">（税別）</span>
-                </div>
-                <div class="text-xs text-red-500 font-bold" id="note-display">${esc(prod.options[0]?.note || '')}</div>
-            </div>
-        </div>
-        ${renderGuideDynamic(prod)}`;
-}
-
-window.updatePrice = function(pIdx, oIdx) {
-    const opt = products[pIdx].options[oIdx];
-    if(opt){
-        const pDisp = document.getElementById('price-display'); const nDisp = document.getElementById('note-display');
-        if(pDisp) pDisp.innerText = opt.price; if(nDisp) nDisp.innerText = opt.note;
-    }
-}
-
-function parseDateLoose(str) {
-    const m = String(str || '').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
-    return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
-}
-
-function renderDeadlines(data) {
-    const zone = document.getElementById('deadline-zone'), box = document.getElementById('deadline-list');
-    if(!zone || !box || !data || data.length < 2) return;
-    const head = data[0];
-    const find = (kws, def) => { const i = getColIndex(head, kws); return i !== -1 ? i : def; };
-    const tCol = find(['項目', 'タイトル', '名称'], 0), sCol = find(['開始'], 1), dCol = find(['締切', '期日', '期限'], 2), nCol = find(['備考', 'メモ', '説明'], 3);
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const week = ['日', '月', '火', '水', '木', '金', '土'];
-
-    const items = [];
-    for(let i = 1; i < data.length; i++) {
-        const row = data[i] || [];
-        const title = String(row[tCol] || '').trim(); const dl = parseDateLoose(row[dCol]);
-        if(!title || !dl) continue;
-        const left = Math.round((dl - today) / 86400000);
-        if(left < 0) continue;
-        items.push({ title, dl, st: parseDateLoose(row[sCol]), left, note: String(row[nCol] || '').trim() });
-    }
-    if(items.length === 0) return;
-    items.sort((a, b) => a.dl - b.dl);
-
-    box.innerHTML = items.map(it => {
-        const pct = (it.st && it.st < it.dl) ? Math.round(Math.min(1, Math.max(0, (today - it.st) / (it.dl - it.st))) * 100) : null;
-        const cls = it.left === 0 ? 'today' : it.left <= 3 ? 'danger' : it.left <= 7 ? 'warn' : '';
-        const label = it.left === 0 ? '本日締切' : `あと${it.left}日`;
-        const d = `${it.dl.getFullYear()}/${it.dl.getMonth() + 1}/${it.dl.getDate()}(${week[it.dl.getDay()]})`;
-        return `<div class="dl-item ${cls}">
-            <div class="dl-top"><div class="dl-title">${esc(it.title)}</div><div class="dl-badge">${label}</div></div>
-            ${pct !== null ? `<div class="dl-track"><div class="dl-fill" style="width:${it.left === 0 ? 100 : pct}%"></div></div>` : ''}
-            <div class="dl-sub"><span>締切 ${d}</span><span>${esc(it.note)}</span></div>
-        </div>`;
-    }).join('');
-    zone.classList.remove('view-hidden');
-}
-
-function runOnMap(fn) { if(currentView === 'map') fn(); else pendingMapAction = fn; }
-
-function scrollToToggle() {
-    const el = document.getElementById('view-toggle'); if(!el) return;
-    window.scrollTo({ top: el.getBoundingClientRect().top + window.pageYOffset, behavior: 'smooth' });
-}
-
-window.setView = function(mode, doScroll = true) {
-    currentView = mode;
-    const isMap = mode === 'map';
-    const mc = document.getElementById('map-container'), lv = document.getElementById('list-view'), sr = document.getElementById('sort-row');
-    if(mc) mc.classList.toggle('view-hidden', !isMap);
-    if(lv) lv.classList.toggle('view-hidden', isMap);
-    if(sr) sr.classList.toggle('view-hidden', isMap);
-    const bMap = document.getElementById('seg-map'), bList = document.getElementById('seg-list');
-    if(bMap) bMap.classList.toggle('active', isMap); if(bList) bList.classList.toggle('active', !isMap);
-    if(isMap && map) {
-        setTimeout(() => { map.invalidateSize(); if(pendingMapAction) { const f = pendingMapAction; pendingMapAction = null; f(); } }, 60);
-    }
-    if(doScroll) scrollToToggle();
-}
-
-function dateKey(str) { const d = parseDateLoose(str); return d ? d.getTime() : 0; }
-
-function sortCenter() {
-    if(searchState.mode === 'radius' && searchState.center) return searchState.center;
-    if(userLat !== null && userLng !== null) return { lat: userLat, lng: userLng, label: '現在地', type: 'current' };
-    return null;
-}
-
-function getVisibleSorted() {
-    const list = stores.filter(isStoreVisible);
-    const sel = document.getElementById('sort-select');
-    let mode = sel ? sel.value : 'distance';
-    const c = sortCenter();
-    if(mode === 'distance' && !c) mode = 'pref';
-    const dist = s => getDistance(c.lat, c.lng, s.lat, s.lng);
-    const prefIdx = s => { const i = PREF_ORDER.indexOf(s.pref); return i === -1 ? 999 : i; };
-    list.sort((a, b) => {
-        if(mode === 'distance') return dist(a) - dist(b);
-        if(mode === 'updated') return dateKey(b.updatedAt) - dateKey(a.updatedAt);
-        if(mode === 'name') return String(a.name).localeCompare(String(b.name), 'ja');
-        return (prefIdx(a) - prefIdx(b)) || String(a.city).localeCompare(String(b.city), 'ja') || String(a.name).localeCompare(String(b.name), 'ja');
-    });
-    return list;
-}
-
-function storeCardHtml(s, c) {
-    const ic = icons[s.category] || defaultIconObj;
-    const src = (ic && ic.options && ic.options.iconUrl) ? ic.options.iconUrl : '';
-    const dist = c ? `${c.type === 'point' ? '指定地点' : '現在地'}から ${getDistance(c.lat, c.lng, s.lat, s.lng).toFixed(1)}km` : '';
-    const meta = [s.category ? esc(s.category) : '', dist].filter(Boolean).join(' ・ ');
-    const r = s.records;
-    const body = s.unavailable !== ''
-        ? '<div class="store-unav">掲載不可(施設都合上)</div>'
-        : '<div class="store-rec">' + [['ボックス', r.tissue], ['ポスター', r.poster], ['ゲート', r.gate], ['手渡し', r.register], ['ジャック', r.jack]]
-            .map(([label, v]) => `<div class="rec-chip"><span>${label}</span>${recordBadge(v, 18)}</div>`).join('') + '</div>';
-    return `<div class="store-card">
-        <div class="store-head">${src ? `<img class="store-icon" src="${src}" alt="" onerror="this.style.display='none'">` : ''}<div class="store-name">${esc(s.name)}</div>
-            <button type="button" class="store-mapbtn" onclick="focusStore(${s.idx})">地図で見る</button></div>
-        <div class="store-addr">${esc(s.address)}</div>
-        ${meta ? `<div class="store-meta">${meta}</div>` : ''}
-        <div class="store-date">更新日 <b>${esc(s.updatedAt || '未実施')}</b></div>
-        ${body}
-    </div>`;
-}
-
-window.renderStoreList = function(reset) {
-    if(reset !== false) listLimit = PAGE_SIZE;
-    const box = document.getElementById('store-list'); if(!box) return;
-    const list = getVisibleSorted(), c = sortCenter();
-    const cnt = document.getElementById('result-count'); if(cnt) cnt.textContent = `${list.length}件`;
-    box.innerHTML = list.length ? list.slice(0, listLimit).map(s => storeCardHtml(s, c)).join('') : '<div class="list-empty">条件に合う店舗がありません</div>';
-    const more = document.getElementById('list-more');
-    if(more) { more.style.display = list.length > listLimit ? 'block' : 'none'; more.textContent = `さらに表示(残り ${list.length - listLimit} 件)`; }
-}
-
-window.showMoreStores = function() { listLimit += PAGE_SIZE; renderStoreList(false); }
-
-window.focusStore = function(idx) {
-    const s = stores[idx]; if(!s) return;
-    pendingMapAction = null;
-    setView('map');
-    setTimeout(() => {
-        map.stop(); map.invalidateSize(); map.setView([s.lat, s.lng], 16, { animate: false });
-        if(s.marker) { if(!map.hasLayer(s.marker)) s.marker.addTo(map); setTimeout(() => s.marker.openPopup(), 150); }
-    }, 300);
-}
-
-window.onload = initApp;
