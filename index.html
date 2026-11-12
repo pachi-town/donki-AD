@@ -9,7 +9,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <link rel="stylesheet" href="style.css?v=ui6">
+    <link rel="stylesheet" href="style.css?v=ui7">
 </head>
 <body>
     <div id="error-banner"></div>
@@ -131,11 +131,8 @@
             </div>
         </section>
 
-        <!-- ⑤-2 注意事項(検索・絞り込みと、リスト/MAPの間。選んだ商材に合わせて切り替わります) -->
-        <section id="notice-zone" class="zone">
-            <div class="zone-title"><span class="zone-dot"></span>注意事項</div>
-            <div id="notice-content"></div>
-        </section>
+        <!-- ⑤-2 店舗単位の注意文(検索・絞り込みと、リスト/MAPの間に常に表示。文言は「説明文」タブの 共通/警告 の行) -->
+        <div id="warn-zone"><div id="warn-content" class="g-warn-box"></div></div>
 
         <!-- ⑥ リスト／MAP 切り替えボタン(スクロールしても上に固定) -->
         <div id="view-toggle">
@@ -176,13 +173,13 @@
         window.addEventListener('unhandledrejection', function (e) { show('⚠ 通信エラー: ' + ((e.reason && e.reason.message) || e.reason)); });
         window.addEventListener('load', function () {
             setTimeout(function () {
-                if (typeof initApp !== 'function' || window.__APP_VERSION !== 'ui6') show('⚠ app.js を読み込めていません(ファイルが途中で切れている、またはアップロードできていない可能性があります)');
+                if (typeof initApp !== 'function' || window.__APP_VERSION !== 'ui7') show('⚠ app.js を読み込めていません(ファイルが途中で切れている、またはアップロードできていない可能性があります)');
                 if (typeof L === 'undefined') show('⚠ 地図ライブラリ(Leaflet)を読み込めていません。通信環境を確認してください');
             }, 1500);
         });
     })();
     </script>
     <!-- 過去のバグキャッシュを強制破棄します -->
-    <script src="app.js?v=ui6" charset="utf-8"></script>
+    <script src="app.js?v=ui7" charset="utf-8"></script>
 </body>
 </html>

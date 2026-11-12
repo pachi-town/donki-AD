@@ -300,6 +300,7 @@ async function initApp() {
         initMap();
         initSearchUI();
         initProductZone();                 // ④ 商材ゾーン
+        renderWarn();                      // ⑤-2 店舗単位の注意文(常に表示)
         applyResponsiveDefaults();         // スマホ=閉じる / PC=すべて展開
         if(window.matchMedia) { const mq = window.matchMedia(WIDE_QUERY); if(mq.addEventListener) mq.addEventListener('change', applyResponsiveDefaults); else if(mq.addListener) mq.addListener(applyResponsiveDefaults); }
         renderDeadlines(deadlineData);     // ③ 申込期日の進捗ゾーン
@@ -675,8 +676,16 @@ function toggleSearch() {
 function applyResponsiveDefaults() {
     const wide = isWide();
     ['start-acc', 'price-acc'].forEach(id => { const d = document.getElementById(id); if(d) d.open = wide; });
-    document.querySelectorAll('#notice-content details').forEach(d => { d.open = wide; });
+    document.querySelectorAll('#product-content details').forEach(d => { d.open = wide; });
     if(searchOpen !== wide) toggleSearch();
+}
+
+// 店舗単位の注意文を、検索・絞り込みとMAPの間に常に表示する(文言は「説明文」タブの 共通/警告 の行。なければ GUIDE_NOTICE)
+function renderWarn() {
+    const box = document.getElementById('warn-content'); if(!box) return;
+    const G = window.__GUIDES || { common: { warning: [] } };
+    const lines = G.common.warning.length ? G.common.warning : [GUIDE_NOTICE];
+    box.innerHTML = lines.map(w => guideText(w)).join('<br>');
 }
 
 function initProductZone() {
@@ -702,20 +711,19 @@ function renderProductContent(index) {
     const P = buildGuideParts(prod);
     const wide = isWide();
 
-    // ① 掲載開始の目安: 見出しには「日付」だけを出し、展開すると 基本ルール・今日から数えたスケジュール・掲載までの流れ
+    // ① 掲載開始の目安: 見出しには「日付」だけを出し、展開すると 今日から数えたスケジュール(掲載までの流れを統合)と、基本ルール
     const sum = document.getElementById('start-summary');
     if(sum) sum.innerHTML = `<div class="start-sum">
         <div class="start-sum-l">⏱ 掲載開始の目安 <span class="g-fast-name">${esc(P.name)}</span></div>
         <div class="start-sum-date">${fmtYMD(P.sc.start)}</div>
-        <div class="start-sum-s">今日(${fmtMD(P.sc.today)})からご相談を始めた場合<span class="tap-hint"> / タップで期日・スケジュール・流れを表示</span></div></div>`;
+        <div class="start-sum-s">今日(${fmtMD(P.sc.today)})からご相談を始めた場合<span class="tap-hint"> / タップで日程の詳細を表示</span></div></div>`;
     const startBox = document.getElementById('start-content');
-    if(startBox) startBox.innerHTML = `<div class="start-grid">
-        <div class="sg-col"><div class="sg-h">期日などの基本ルール</div>${P.ruleHtml}</div>
+    if(startBox) startBox.innerHTML = `<div class="start-grid${P.ruleHtml ? '' : ' single'}">
         <div class="sg-col"><div class="sg-h">今日から数えたスケジュール</div><div class="g-timeline">${P.timeline}</div>
             <div class="g-sched-note">※土日のみを除いて計算した目安です(祝日・年末年始・店舗の事情は含みません)。実際の日程は、店舗と相談して決定します。</div></div>
-        <div class="sg-col"><div class="sg-h">掲載までの流れ</div>${P.flowHtml}</div></div>`;
+        ${P.ruleHtml ? `<div class="sg-col"><div class="sg-h">期日などの基本ルール</div>${P.ruleHtml}</div>` : ''}</div>`;
 
-    // ② 商材情報・料金(閉じた状態から、タップで展開)
+    // ② 商材情報・料金(閉じた状態から、タップで展開)。料金の下に「仕様・注意事項」を開け閉めできる形で置く
     const sub = document.getElementById('price-summary'); if(sub) sub.textContent = prod.title || '';
     const content = document.getElementById('product-content');
     if(content) {
@@ -737,14 +745,9 @@ function renderProductContent(index) {
                     </div>
                     <div class="text-xs text-red-500 font-bold" id="note-display">${esc(prod.options[0]?.note || '')}</div>
                 </div>
-            </div></div>`;
+            </div></div>
+            <details class="g-accordion g-spec"${wide ? ' open' : ''}><summary>${esc(P.name)} の仕様・注意事項</summary><div class="g-acc-content">${P.specHtml}</div></details>`;
     }
-
-    // ③ 注意事項(検索・絞り込みと、リスト/MAPの間に表示)
-    const nc = document.getElementById('notice-content');
-    if(nc) nc.innerHTML = `<div class="notice-grid">
-        <div class="g-warn-box">${P.warn}</div>
-        <details class="g-accordion"${wide ? ' open' : ''}><summary>${esc(P.name)} の仕様・注意事項</summary><div class="g-acc-content">${P.specHtml}</div></details></div>`;
 }
 
 window.updatePrice = function(pIdx, oIdx) {
@@ -759,32 +762,14 @@ window.updatePrice = function(pIdx, oIdx) {
  * 掲載までの流れ・期日・注意事項(商材ボタンで切り替わる / アコーディオン)
  *
  *   文章は、スプレッドシートの「説明文」タブから読み込みます。 列: A=項目 / B=種別 / C=内容
- *     項目「共通」   … 種別: 警告 / 流れ / 基本ルール
+ *     項目「共通」   … 種別: 警告(検索とMAPの間に常に表示) / 基本ルール(掲載開始の目安の中に表示)
+ *                      ※種別「流れ」の行は、使いません(流れはスケジュールに統合したので、削除して構いません)
  *     項目「商材名」 … 種別: 仕様 / 注意 / 素材入稿日数(数字・任意) / 制作の目安(文字・任意)
- *   ※「流れ」の行は、先頭が「※」の行を、直前の手順の補足として表示します。
- *   「説明文」タブが空・ないときは、下の初期文言(GUIDE_ で始まるもの)を使います。
+ *   「警告」の行がないとき・タブが空のときは、下の GUIDE_NOTICE の文言を表示します。
  * ============================================================ */
 const GUIDE_NOTICE = '店舗単位での都度確認になりますので「掲載可能店舗一覧」等のご用意はありません。希望実施ドンキ店舗を必ず選択してご依頼下さい。';
 const CONFIRM_BDAYS = 5; // 開催確認に必要な営業日数(平均)
 
-const GUIDE_FLOW_DEFAULT = [
-    '店舗と相談して案件を決定する(商材・期間・実施希望ドンキ店舗名・数量)',
-    '※商材、数量はこの時点ではまだ確定でなくてもOKです',
-    '※制作に日数がかかるので、ご相談はお早めにお願いします',
-    '開催可能か確認する(開催確認依頼メールを送付)',
-    '※5営業日程度かかります(ドンキ店舗ごとの判断のため、もっとかかる場合もあります)',
-    '実施可否を店舗に連絡する',
-    '※ドンキ判断でお断りする場合があります',
-    '獲得が決まったら、獲得報告メールを送る',
-    '※この時点で全ての内容が確定となり、以降、店舗都合のキャンセルは承れません',
-    '素材(デザイン)を店舗から回収して、メールで送る',
-    '※商材ごとにテンプレートや注意事項が異なるため、各商材の項目を必ずご確認ください'
-];
-const GUIDE_RULES_DEFAULT = [
-    '申込期日(ドンキAD申請期日): 原則、開催開始日の1か月前です。事前に店舗と相談して、実施可否を決定してからの申請となります',
-    '開催確認に必要な日数: 平均5営業日です(広告内容により変動します)',
-    '素材(デザイン)入稿期限: 商材によって異なります(各商材の項目をご確認ください)'
-];
 
 // 商材ごとの初期設定。matDays: 素材入稿期限(開催日の何日前か) / lead: 制作にかかる日数の目安
 const GUIDE_DEFAULTS = {
@@ -914,20 +899,21 @@ function buildSchedule(kind, matDays, matText, lead) {
     const apply = addMonthsClamped(start, -1);
     const mat = matDays ? addDays(start, -matDays) : null;
 
+    // 「掲載までの流れ」の内容は、ここ(日付つきのスケジュール)にまとめています。s=補足 / w=注意(赤字)
     const items = [
-        { d: today, t: '店舗と相談して案件を決定', s: lead ? `制作の目安: ${lead}(数量によりもっとかかります)` : '制作に日数がかかるので、お早めにご相談ください' },
-        { d: answer, t: '開催確認の回答(目安)', s: `平均${CONFIRM_BDAYS}営業日。店舗ごとの判断のため、もっとかかる場合もあります` }
+        { d: today, t: '店舗と相談して案件を決定', s: [lead ? `制作の目安: ${lead}(数量によりもっとかかります)` : '制作に日数がかかるので、お早めにご相談ください', '商材・数量は、この時点ではまだ確定でなくてOKです'] },
+        { d: answer, t: '開催確認の回答(目安)', s: [`平均${CONFIRM_BDAYS}営業日。店舗ごとの判断のため、もっとかかる場合もあります`], w: 'ドンキ判断でお断りする場合があります' }
     ];
-    const applyItem = { d: apply, t: '申込期日(獲得報告メール)', s: '原則、開催開始日の1か月前' };
-    const matItem = mat ? { d: mat, t: '素材(デザイン)入稿期限', s: matText || '商材ごとに異なります' } : null;
-    if(matItem && matItem.d.getTime() === applyItem.d.getTime()) items.push({ d: apply, t: '申込期日 / 素材入稿期限', s: '獲得報告メールと素材(デザイン)の入稿' });
+    const applyItem = { d: apply, t: '申込期日(獲得報告メール)', s: ['原則、開催開始日の1か月前。事前に店舗と相談して、実施可否を決定してからの申請です'].concat(mat ? [] : ['素材(デザイン)の入稿期限は、商材によって異なります']), w: 'この時点で全ての内容が確定となり、以降、店舗都合のキャンセルは承れません' };
+    const matItem = mat ? { d: mat, t: '素材(デザイン)入稿期限', s: [matText || '商材ごとに異なります', '店舗から素材を回収して、メールで送ります。商材ごとにテンプレートや注意事項が異なります'] } : null;
+    if(matItem && matItem.d.getTime() === applyItem.d.getTime()) items.push({ d: apply, t: '申込期日 / 素材入稿期限', s: applyItem.s.concat(matItem.s), w: applyItem.w });
     else { items.push(applyItem); if(matItem) items.push(matItem); }
     items.sort((a, b) => a.d - b.d);
-    items.push({ d: start, t: '掲載開始(最短の目安)', s: kind === 'poster' ? 'ポスターは毎月1日・16日開始です' : '', hl: true });
+    items.push({ d: start, t: '掲載開始(最短の目安)', s: kind === 'poster' ? ['ポスターは毎月1日・16日開始です'] : [], hl: true });
     return { today, start, items };
 }
 
-// 説明文の部品(警告・スケジュール・流れ・基本ルール・仕様/注意)をまとめて作る
+// 説明文の部品(スケジュール・基本ルール・仕様/注意)をまとめて作る
 function buildGuideParts(prod) {
     const G = window.__GUIDES || { common: { warning: [], flow: [], rule: [] }, items: {} };
     const kind = productKind(prod.title), def = GUIDE_DEFAULTS[kind] || null, item = guideItemFor(prod);
@@ -939,20 +925,10 @@ function buildGuideParts(prod) {
     const sc = buildSchedule(kind, matDays, def ? def.matText : '', lead);
     const timeline = sc.items.map((it, i) => `${i > 0 ? '<div class="gt-line"></div>' : ''}
         <div class="gt-item${it.hl ? ' hl' : ''}"><div class="gt-dot"></div><div class="gt-date">${fmtMD(it.d)}</div>
-        <div class="gt-text">${esc(it.t)}${it.s ? `<br><small>${esc(it.s)}</small>` : ''}</div></div>`).join('');
+        <div class="gt-text">${esc(it.t)}${(it.s || []).map(x => `<br><small>${esc(x)}</small>`).join('')}${it.w ? `<br><small class="gt-w">⚠ ${esc(it.w)}</small>` : ''}</div></div>`).join('');
 
-    // --- 警告 ---
-    const warn = (G.common.warning.length ? G.common.warning : [GUIDE_NOTICE]).map(w => guideText(w)).join('<br>');
-
-    // --- 掲載までの流れ(「※」で始まる行は、直前の手順の補足) ---
-    const flowLines = G.common.flow.length ? G.common.flow : GUIDE_FLOW_DEFAULT;
-    const steps = [];
-    flowLines.forEach(l => { if(l.charAt(0) === '※' && steps.length) steps[steps.length - 1].notes.push(l); else steps.push({ t: l, notes: [] }); });
-    const flowHtml = '<ol class="g-ol">' + steps.map(s => `<li><div class="g-step-t">${guideText(s.t)}</div>${s.notes.map(n => `<div class="g-step-n">${guideText(n)}</div>`).join('')}</li>`).join('') + '</ol>';
-
-    // --- 基本ルール ---
-    const rules = G.common.rule.length ? G.common.rule : GUIDE_RULES_DEFAULT;
-    const ruleHtml = '<ul class="g-ul">' + rules.map(r => `<li class="g-li">${guideText(r)}</li>`).join('') + '</ul>';
+    // --- 基本ルール(「説明文」タブの 共通/基本ルール の行。ないときは何も出さない) ---
+    const ruleHtml = G.common.rule.length ? '<ul class="g-ul">' + G.common.rule.map(r => `<li class="g-li">${guideText(r)}</li>`).join('') + '</ul>' : '';
 
     // --- 商材ごとの仕様・注意(「説明文」タブにあればそれを、なければ初期文言を使う) ---
     let secs = [];
@@ -964,7 +940,7 @@ function buildGuideParts(prod) {
         ? secs.map(sec => `<div class="g-sec-h">${esc(sec.h)}</div><ul class="g-ul">${sec.items.map(i => `<li class="g-li">${guideText(i)}</li>`).join('')}</ul>`).join('')
         : '<div class="g-li">この商材の詳細は、お問い合わせください。</div>';
 
-    return { name, sc, warn, timeline, flowHtml, ruleHtml, specHtml };
+    return { name, sc, timeline, ruleHtml, specHtml };
 }
 
 /* ============================================================
@@ -1108,5 +1084,5 @@ window.focusStore = function(idx) {
     }, 300);
 }
 
-window.__APP_VERSION = 'ui6';
+window.__APP_VERSION = 'ui7';
 window.onload = initApp;
