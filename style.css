@@ -175,7 +175,7 @@ input:checked + .slider:before { transform: translateX(20px); }
 .g-fast-ans { line-height: 1.5; font-size: 12px; }
 .g-fast-date { display: inline-block; margin-top: 4px; font-size: 22px; font-weight: 800; color: #b45309; }
 .g-fast-name { margin-left: 8px; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; color: #854d0e; background: #fef9c3; vertical-align: 3px; }
-.g-sched-note { margin: -12px 0 14px; font-size: 10px; line-height: 1.5; color: #9ca3af; }
+.g-sched-note { margin: 6px 0 0; font-size: 10px; line-height: 1.5; color: #9ca3af; }
 .g-accordion { margin-top: 8px; }
 .g-accordion summary::after { content: '＋'; float: right; font-weight: 700; color: #9ca3af; }
 .g-accordion[open] summary::after { content: '－'; }
@@ -185,3 +185,36 @@ input:checked + .slider:before { transform: translateX(20px); }
 .g-step-t { font-size: 13px; font-weight: 800; line-height: 1.5; color: #111; }
 .g-step-n { margin-top: 2px; font-size: 11px; line-height: 1.6; color: #6b7280; }
 .g-link { color: #2563eb; text-decoration: underline; font-weight: 700; }
+
+
+/* ================= スマホ: 商材ボタン(最後の段は中央) + アコーディオン ================= */
+.product-tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.prod-tab { flex: 0 0 calc((100% - 12px) / 3); box-sizing: border-box; }
+.product-tabs[data-n="1"] .prod-tab { flex-basis: 100%; }
+.product-tabs[data-n="2"] .prod-tab, .product-tabs[data-n="4"] .prod-tab { flex-basis: calc((100% - 6px) / 2); }
+.g-fast-ans { margin-bottom: 12px; }
+.g-accordion .g-warn-box { margin-bottom: 0; }
+.g-accordion .g-timeline { margin-bottom: 8px; }
+.g-acc-warn { border-color: #fecaca; background: #fef2f2; }
+.g-acc-warn[open] { background: #fff; }
+.g-acc-warn summary { color: #b91c1c; }
+
+/* ================= PC(幅960px以上): 左右2列。左=申込スケジュール・商材 / 右=検索・MAP(画面に固定) ================= */
+#col-left, #col-right { display: contents; }
+@media (min-width: 960px) {
+    #app-container { max-width: 1440px; display: grid; grid-template-columns: minmax(400px, 500px) minmax(0, 1fr); column-gap: 16px; align-items: start; padding-bottom: 16px; }
+    #header, #header-banner { grid-column: 1 / -1; }
+    #col-left { display: block; grid-column: 1; padding-bottom: 24px; }
+    #col-left .zone { margin-right: 0; }
+    #col-right { display: flex; flex-direction: column; grid-column: 2; position: sticky; top: 0; height: 100vh; height: 100dvh; box-sizing: border-box; padding: 10px 12px 12px 0; }
+    #col-right .zone { margin: 0 0 8px; flex: 0 0 auto; max-height: 52%; overflow-y: auto; }
+    #view-toggle { position: static; margin-top: 0; flex: 0 0 auto; border: 1px solid #e5e7eb; border-bottom: none; border-radius: 14px 14px 0 0; box-shadow: none; }
+    #list-view { flex: 1 1 0; min-height: 0; overflow-y: auto; padding-bottom: 12px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 14px 14px; background: #f3f4f6; }
+    #map-container { flex: 1 1 0; height: auto; min-height: 0; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 14px 14px; }
+    /* リストは、幅を活かして2列で並べる */
+    #store-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 0 4px; padding: 0 4px 0 0; }
+    .store-card { margin: 8px 0 0 12px; }
+    #list-more { width: calc(100% - 24px); }
+    /* 商材ゾーン: アコーディオンは開いた状態。タブ・価格などは、広めに表示 */
+    .g-fast-date { font-size: 26px; }
+}

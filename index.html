@@ -9,7 +9,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <link rel="stylesheet" href="style.css?v=ui4">
+    <link rel="stylesheet" href="style.css?v=ui5">
 </head>
 <body>
     <div id="error-banner"></div>
@@ -24,6 +24,8 @@
         <!-- ② ヘッダーバナーゾーン -->
         <img id="header-banner" src="" alt="Header Banner" style="display:none;">
 
+        <!-- 左の列(PC表示): 申込スケジュール・商材情報。スマホでは、縦に並ぶだけです -->
+        <div id="col-left">
         <!-- ③ 申込までの期日進捗ゾーン(「申込期日」シートにデータがあるときだけ表示) -->
         <section id="deadline-zone" class="zone view-hidden">
             <div class="zone-title"><span class="zone-dot"></span>申込スケジュール</div>
@@ -36,7 +38,10 @@
             <div class="product-tabs" id="product-tabs"></div>
             <div id="product-content"></div>
         </section>
+        </div>
 
+        <!-- 右の列(PC表示): 検索・リスト/MAP。画面に固定され、MAPが大きく表示されます -->
+        <div id="col-right">
         <!-- ⑤ 検索・ソートゾーン -->
         <section id="search-panel" class="zone">
             <div class="search-head" onclick="toggleSearch()">
@@ -139,6 +144,7 @@
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
             </button>
         </div>
+        </div>
     </div>
     <!-- 読み込みエラーを画面上部の赤い帯に表示します(app.js が途中で切れている・アップロード漏れ等の原因調査用) -->
     <script>
@@ -156,13 +162,13 @@
         window.addEventListener('unhandledrejection', function (e) { show('⚠ 通信エラー: ' + ((e.reason && e.reason.message) || e.reason)); });
         window.addEventListener('load', function () {
             setTimeout(function () {
-                if (typeof initApp !== 'function' || window.__APP_VERSION !== 'ui4') show('⚠ app.js を読み込めていません(ファイルが途中で切れている、またはアップロードできていない可能性があります)');
+                if (typeof initApp !== 'function' || window.__APP_VERSION !== 'ui5') show('⚠ app.js を読み込めていません(ファイルが途中で切れている、またはアップロードできていない可能性があります)');
                 if (typeof L === 'undefined') show('⚠ 地図ライブラリ(Leaflet)を読み込めていません。通信環境を確認してください');
             }, 1500);
         });
     })();
     </script>
     <!-- 過去のバグキャッシュを強制破棄します -->
-    <script src="app.js?v=ui4" charset="utf-8"></script>
+    <script src="app.js?v=ui5" charset="utf-8"></script>
 </body>
 </html>

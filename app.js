@@ -6,8 +6,11 @@
  * ============================================================ */
 const SHEET_ID = '1wo0qLk-eYag_tqp-kZwE6CpNdFACwPWTtFCroxHdk1s';
 const PREF_ORDER = ["北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県","茨城県","栃木県","群馬県","埼玉県","千葉県","東京都","神奈川県","新潟県","富山県","石川県","福井県","山梨県","長野県","岐阜県","静岡県","愛知県","三重県","滋賀県","京都府","大阪府","兵庫県","奈良県","和歌山県","鳥取県","島根県","岡山県","広島県","山口県","徳島県","香川県","愛媛県","高知県","福岡県","佐賀県","長崎県","熊本県","大分県","宮崎県","鹿児島県","沖縄県"];
+const WIDE_QUERY = '(min-width: 960px)';   // この幅以上を「PC表示」(左右2列)とする
 const DEFAULT_VIEW = 'map';   // 最初に表示する画面: 'map' か 'list'
 const PAGE_SIZE = 50;         // リストを一度に表示する件数
+
+function isWide() { return window.matchMedia && window.matchMedia(WIDE_QUERY).matches; }
 
 function showError(msg) { const eb = document.getElementById('error-banner'); if(eb){ eb.innerText = msg; eb.style.display = 'block'; } }
 
@@ -331,8 +334,10 @@ function initMap() {
     map = L.map('map', { doubleClickZoom: true, tap: false }).setView([35.6895, 139.6917], 5);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
 
-    map.on('click', () => { if(searchOpen) toggleSearch(); });
-    map.on('dragstart', () => { if(searchOpen) toggleSearch(); });
+    map.on('click', () => { if(searchOpen && !isWide()) toggleSearch(); });
+    map.on('dragstart', () => { if(searchOpen && !isWide()) toggleSearch(); });
+    // 画面の大きさが変わったとき(検索パネルの開閉・PCの2列表示)に、地図の大きさを合わせ直す
+    if(window.ResizeObserver) { new ResizeObserver(() => { if(map) map.invalidateSize(); }).observe(document.getElementById('map-container')); }
     // ポップアップが地図の上端からはみ出したら、見える位置まで地図を動かす(上の切り替えバーの下に隠れないように)
     map.on('popupopen', () => setTimeout(() => {
         const pop = document.querySelector('.leaflet-popup'); if(!pop) return;
@@ -573,7 +578,7 @@ function finishSearch(fitFn, emptyMsg) {
     const visible = stores.filter(isStoreVisible);
     if(visible.length === 0 && emptyMsg) showNotice(emptyMsg);
     if(fitFn) runOnMap(fitFn);
-    if(searchOpen) toggleSearch();
+    if(searchOpen && !isWide()) toggleSearch();
     scrollToToggle();
 }
 
@@ -668,7 +673,7 @@ function initProductZone() {
     const tabs = document.getElementById('product-tabs'); if(!tabs) return;
     tabs.innerHTML = '';
     const n = products.length;
-    tabs.style.gridTemplateColumns = `repeat(${n <= 3 ? Math.max(n, 1) : (n === 4 ? 2 : 3)}, 1fr)`;
+    tabs.dataset.n = String(n); // CSSが、個数に合わせて幅を決める
     products.forEach((p, i) => {
         const t = document.createElement('div'); t.className = `prod-tab ${i === 0 ? 'active' : ''}`;
         t.innerText = getShortTabName(p.title);
@@ -922,15 +927,16 @@ function renderGuide(prod) {
         ? secs.map(sec => `<div class="g-sec-h">${esc(sec.h)}</div><ul class="g-ul">${sec.items.map(i => `<li class="g-li">${guideText(i)}</li>`).join('')}</ul>`).join('')
         : '<div class="g-li">この商材の詳細は、お問い合わせください。</div>';
 
+    const op = isWide() ? ' open' : ''; // スマホは閉じた状態が標準 / PCは幅があるので開いた状態
     return `
     <div class="g-dynamic-wrap">
         <div class="g-fast-ans">⏱ 今日(${fmtMD(sc.today)})からご相談を始めた場合の、最短の掲載開始日の目安<br><span class="g-fast-date">${fmtYMD(sc.start)}</span><span class="g-fast-name">${esc(name)}</span></div>
-        <div class="g-warn-box">${warn}</div>
-        <div class="g-timeline">${timeline}</div>
-        <div class="g-sched-note">※土日のみを除いて計算した目安です(祝日・年末年始・店舗の事情は含みません)。実際の日程は、店舗と相談して決定します。</div>
-        <details class="g-accordion"><summary>掲載までの流れ</summary><div class="g-acc-content">${flowHtml}</div></details>
-        <details class="g-accordion"><summary>期日などの基本ルール</summary><div class="g-acc-content">${ruleHtml}</div></details>
-        <details class="g-accordion"><summary>${esc(name)} の仕様・注意事項</summary><div class="g-acc-content">${specHtml}</div></details>
+        <details class="g-accordion g-acc-warn"${op}><summary>⚠ ご注意(必ずお読みください)</summary><div class="g-acc-content"><div class="g-warn-box">${warn}</div></div></details>
+        <details class="g-accordion"${op}><summary>今日から数えたスケジュール</summary><div class="g-acc-content"><div class="g-timeline">${timeline}</div>
+            <div class="g-sched-note">※土日のみを除いて計算した目安です(祝日・年末年始・店舗の事情は含みません)。実際の日程は、店舗と相談して決定します。</div></div></details>
+        <details class="g-accordion"${op}><summary>掲載までの流れ</summary><div class="g-acc-content">${flowHtml}</div></details>
+        <details class="g-accordion"${op}><summary>期日などの基本ルール</summary><div class="g-acc-content">${ruleHtml}</div></details>
+        <details class="g-accordion"${op}><summary>${esc(name)} の仕様・注意事項</summary><div class="g-acc-content">${specHtml}</div></details>
     </div>`;
 }
 
@@ -986,6 +992,7 @@ function renderDeadlines(data) {
 function runOnMap(fn) { if(currentView === 'map') fn(); else pendingMapAction = fn; }
 
 function scrollToToggle() {
+    if(isWide()) return; // PCは左右2列で、地図が画面に固定されているのでスクロール不要
     const el = document.getElementById('view-toggle'); if(!el) return;
     window.scrollTo({ top: el.getBoundingClientRect().top + window.pageYOffset, behavior: 'smooth' });
 }
@@ -1075,5 +1082,5 @@ window.focusStore = function(idx) {
     }, 300);
 }
 
-window.__APP_VERSION = 'ui4';
+window.__APP_VERSION = 'ui5';
 window.onload = initApp;
