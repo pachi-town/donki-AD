@@ -137,3 +137,51 @@ input:checked + .slider:before { transform: translateX(20px); }
 .g-sec-h { font-weight: 700; font-size: 13px; margin: 20px 0 8px; padding-bottom: 4px; border-bottom: 1px solid #e5e7eb; color: #111; }
 .g-ul { padding-left: 18px; margin: 0; list-style-type: disc; }
 .g-li { margin-bottom: 6px; line-height: 1.5; }
+
+/* ================= 検索ゾーン(エリア / 半径 / キーワード) ================= */
+.search-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer; }
+.search-head-title { font-size: 15px; font-weight: 800; color: #111; }
+.search-summary { margin-top: 2px; font-size: 11px; font-weight: 700; color: #b45309; }
+#search-contents { margin-top: 12px; }
+.seg-sm button { height: 32px; font-size: 12px; }
+.search-pane { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+.apply-btn { width: 100%; height: 42px; font-size: 14px; font-weight: 700; color: #facc15; background: #111; border: none; border-radius: 10px; cursor: pointer; transition: 0.2s; }
+.apply-btn:active { transform: scale(0.98); }
+.kw-input, .addr-row input, .radius-row input { box-sizing: border-box; width: 100%; height: 42px; padding: 0 12px; font-size: 14px; color: #1f2937; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; outline: none; }
+.kw-input:focus, .addr-row input:focus, .radius-row input:focus { border-color: #facc15; background: #fff; }
+.addr-row { display: flex; gap: 8px; }
+.addr-btn { flex-shrink: 0; height: 42px; padding: 0 14px; font-size: 12px; font-weight: 700; color: #111; background: #fef08a; border: 1px solid #facc15; border-radius: 10px; cursor: pointer; }
+#center-point { display: flex; flex-direction: column; gap: 8px; }
+#addr-results { display: flex; flex-direction: column; gap: 6px; }
+.addr-item { text-align: left; padding: 9px 12px; font-size: 12px; color: #374151; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; cursor: pointer; }
+.addr-item:active { background: #fffbe6; border-color: #facc15; }
+.addr-msg { padding: 6px 2px; font-size: 12px; color: #6b7280; }
+.center-label { font-size: 12px; font-weight: 700; color: #4b5563; }
+.radius-row { display: flex; align-items: center; gap: 8px; }
+.radius-unit { flex-shrink: 0; font-size: 12px; font-weight: 700; color: #6b7280; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.search-sub { margin: 14px 0 6px; font-size: 11px; font-weight: 800; color: #9ca3af; }
+.center-pin { width: 22px; height: 22px; border-radius: 50%; background: #ef4444; border: 4px solid #fff; box-shadow: 0 0 0 2px #ef4444, 0 2px 8px rgba(0,0,0,0.35); box-sizing: border-box; }
+
+/* お知らせ(画面の下に数秒だけ表示) */
+#toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); z-index: 4000; max-width: 86%; padding: 11px 18px; border-radius: 12px; font-size: 13px; font-weight: 700; color: #fff; background: rgba(17,17,17,0.92); transform: translate(-50%, 20px); opacity: 0; pointer-events: none; transition: .25s; text-align: center; }
+#toast.show { transform: translate(-50%, 0); opacity: 1; }
+
+.popup-addr { margin-bottom: 8px; font-size: 11px; color: #6b7280; line-height: 1.4; }
+.store-addr { margin-top: 8px; font-size: 12px; color: #374151; line-height: 1.4; }
+.store-meta { margin-top: 4px; }
+
+/* ---------------- 商材ゾーンの追加分(今日から数える最短日・アコーディオンの矢印・手順リスト) ---------------- */
+.g-fast-ans { line-height: 1.5; font-size: 12px; }
+.g-fast-date { display: inline-block; margin-top: 4px; font-size: 22px; font-weight: 800; color: #b45309; }
+.g-fast-name { margin-left: 8px; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; color: #854d0e; background: #fef9c3; vertical-align: 3px; }
+.g-sched-note { margin: -12px 0 14px; font-size: 10px; line-height: 1.5; color: #9ca3af; }
+.g-accordion { margin-top: 8px; }
+.g-accordion summary::after { content: '＋'; float: right; font-weight: 700; color: #9ca3af; }
+.g-accordion[open] summary::after { content: '－'; }
+.g-ol { margin: 0; padding: 0; list-style: none; counter-reset: gstep; }
+.g-ol > li { position: relative; padding: 0 0 12px 34px; counter-increment: gstep; }
+.g-ol > li::before { content: counter(gstep); position: absolute; left: 0; top: 0; width: 24px; height: 24px; border-radius: 50%; font-size: 12px; font-weight: 800; line-height: 24px; text-align: center; color: #facc15; background: #111; }
+.g-step-t { font-size: 13px; font-weight: 800; line-height: 1.5; color: #111; }
+.g-step-n { margin-top: 2px; font-size: 11px; line-height: 1.6; color: #6b7280; }
+.g-link { color: #2563eb; text-decoration: underline; font-weight: 700; }

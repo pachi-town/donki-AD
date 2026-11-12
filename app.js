@@ -1,25 +1,35 @@
+/* ============================================================
+ * ドンキAD MAP  app.js (UI v3)
+ *   ・店舗の位置      … スプレッドシート「店舗座標一覧」A〜F列(店舗名・都道府県・カテゴリ・住所・緯度・経度)
+ *   ・タップ時の情報  … 「開催状況集計」(更新日・広告実績・施設情報・MAP表示) ※住所で結びつけ、一致しなければ店舗名で結びつけ
+ *   ・そのほか        … Prices(商材) / icon(ピン画像) / ヘッダーバナー / 申込期日(任意)
+ * ============================================================ */
 const SHEET_ID = '1wo0qLk-eYag_tqp-kZwE6CpNdFACwPWTtFCroxHdk1s';
 const PREF_ORDER = ["北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県","茨城県","栃木県","群馬県","埼玉県","千葉県","東京都","神奈川県","新潟県","富山県","石川県","福井県","山梨県","長野県","岐阜県","静岡県","愛知県","三重県","滋賀県","京都府","大阪府","兵庫県","奈良県","和歌山県","鳥取県","島根県","岡山県","広島県","山口県","徳島県","香川県","愛媛県","高知県","福岡県","佐賀県","長崎県","熊本県","大分県","宮崎県","鹿児島県","沖縄県"];
-const DEFAULT_VIEW = 'map';
-const PAGE_SIZE = 50;
+const DEFAULT_VIEW = 'map';   // 最初に表示する画面: 'map' か 'list'
+const PAGE_SIZE = 50;         // リストを一度に表示する件数
 
-function showError(msg) { 
-    const eb = document.getElementById('error-banner'); 
-    if(eb){ eb.innerText = msg; eb.style.display = 'block'; } 
+function showError(msg) { const eb = document.getElementById('error-banner'); if(eb){ eb.innerText = msg; eb.style.display = 'block'; } }
+
+// 画面下に数秒だけ出すお知らせ(スクロールしていても見える)
+let noticeTimer = null;
+function showNotice(msg) {
+    let t = document.getElementById('toast');
+    if(!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(noticeTimer); noticeTimer = setTimeout(() => t.classList.remove('show'), 3500);
 }
 
 async function fetchCSV(sheetName) {
     const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}&_t=${new Date().getTime()}`;
     try {
         const res = await fetch(url, { cache: 'no-store' });
-        if (!res.ok) { console.warn(`Sheet not found: ${sheetName}`); return []; }
+        if (!res.ok) return [];
         const text = await res.text();
-        if(text.trim().startsWith('<')) { console.warn(`Invalid HTML response for: ${sheetName}`); return []; }
+        if(text.trim().startsWith('<')) return [];
         return parseCSV(text);
-    } catch (e) {
-        console.warn(`Fetch error for ${sheetName}:`, e);
-        return [];
     }
+    catch (e) { return []; }
 }
 
 function parseCSV(str) {
@@ -58,75 +68,131 @@ function getDistance(lat1, lon1, lat2, lon2) {
 
 function getShortTabName(title) {
     if (!title) return '詳細';
-    if (title.indexOf('手渡し') !== -1 || title.indexOf('ポケット') !== -1) return 'ティッシュ手渡し';
-    if (title.indexOf('ボックス') !== -1 || title.indexOf('BOX') !== -1) return 'BOXティッシュ';
-    if (title.indexOf('ポスター') !== -1) return 'ポスター';
-    if (title.indexOf('ゲート') !== -1) return 'ゲート';
-    if (title.indexOf('ジャック') !== -1 || title.indexOf('装飾') !== -1) return '店舗ジャック';
+    if (title.includes('手渡し') || title.includes('ポケット')) return 'ティッシュ手渡し';
+    if (title.includes('ボックス') || title.includes('BOX')) return 'BOXティッシュ';
+    if (title.includes('ポスター')) return 'ポスター';
+    if (title.includes('ゲート')) return 'ゲート';
+    if (title.includes('ジャック') || title.includes('装飾')) return '店舗ジャック';
     return title.substring(0, 6);
 }
 
-// エラーの原因だった特殊処理を排除し、安全に文字をエスケープする
-function esc(v) { 
-    return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) {
-        return { '&': '&', '<': '<', '>': '>', '"': '"', "'": ''' }[c];
+/* ---------- 文字の正規化(住所の結びつけ・キーワード検索用) ---------- */
+// HTMLに表示する文字を安全に変換する(「&」記号は文字コード38から作っています。
+// コードの中にHTML用の特殊な書き方を直接書くと、コピーの途中で壊れて動かなくなることがあるため)
+const AMP = String.fromCharCode(38);
+const ESC_MAP = { '&': AMP + 'amp;', '<': AMP + 'lt;', '>': AMP + 'gt;', '"': AMP + 'quot;', "'": AMP + '#39;' };
+function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ESC_MAP[c]); }
+
+// 漢数字 → 算用数字(「三条」「四丁目」など、条・丁目・番・号の直前だけ)
+function kanjiToNum(s) {
+    const map = { '〇': 0, '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9 };
+    return String(s).replace(/([〇一二三四五六七八九十]+)(?=条|丁目|番|号)/g, m => {
+        if(m.indexOf('十') >= 0) { const [a, b] = m.split('十'); return String((a ? map[a] : 1) * 10 + (b ? map[b] : 0)); }
+        return m.split('').map(c => map[c]).join('');
     });
 }
 
+// 住所の表記ゆれを揃える(例: 栄1丁目2番49号 = 栄1-2-49 / 西出町31番地 = 西出町31)
 function normAddr(s) {
-    let t = String(s || '').normalize('NFKC').replace(/\s/g, '');
-    // 複雑な漢数字変換を廃止し、ハイフン化のみ実施
-    t = t.replace(/ー/g, '-').replace(/−/g, '-');
-    t = t.replace(/丁目/g, '-').replace(/番地/g, '-').replace(/番/g, '-').replace(/号/g, '');
+    let t = kanjiToNum(String(s || '').normalize('NFKC').replace(/\s/g, ''));
+    t = t.replace(/(\d)[ー‐‑‒–—―−](\d)/g, '$1-$2');
+    t = t.replace(/丁目|番地|番/g, '-').replace(/号/g, '');
     return t.replace(/-+/g, '-').replace(/-$/, '');
 }
 
+// キーワード検索用: 全角半角・大文字小文字・ひらがな/カタカナ・「・」を区別しない
 function normText(s) {
-    return String(s || '').normalize('NFKC').toLowerCase().replace(/\s/g, '');
+    return String(s || '').normalize('NFKC').toLowerCase()
+        .replace(/[\u3041-\u3096]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60))
+        .replace(/[\s・･\-]/g, '');
 }
 
-function getRawUrl(url) {
-    return url ? url.trim() : '';
-}
-
+/* ---------- グローバル状態 ---------- */
 let stores = [], products = [], map, icons = {}, activeCategories = [], userLat = null, userLng = null, userMarker = null;
 let defaultIconObj = null;
 let currentView = DEFAULT_VIEW, listLimit = PAGE_SIZE, pendingMapAction = null, searchOpen = false;
-const hiddenAddr = new Set(), hiddenName = new Set();
+const hiddenAddr = new Set(), hiddenName = new Set(); // 「MAP表示」が OFF の店舗
+let hiddenCount = 0;
+// 検索条件。mode は 'none' | 'region'(都道府県・市区町村) | 'radius'(半径) | 'keyword'(文字検索) のどれか1つだけ
 let searchState = { mode: 'none', pref: '', city: '', radius: 0, center: null, keyword: '' };
+let centerType = 'current', pickedPoint = null, radiusCircle = null, centerMarker = null, addrCandidates = [];
 
+// ==== ピン画像の探索設定 ====
+const PIN_DIR = './images/pin/';
+const RAW_BASE = 'https://raw.githubusercontent.com/pachi-town/donki-AD/main/images/pin/';
+const CDN_BASE = 'https://cdn.jsdelivr.net/gh/pachi-town/donki-AD@main/images/pin/';
+const missingPins = []; // 見つからなかった画像の記録(画面上のエラーバナーに表示)
+
+// 画像が全部見つからなかった時に出す代替ピン(黄色い丸)
+function makeFallbackIcon() {
+    return L.divIcon({
+        className: '',
+        html: '<div style="width:28px;height:28px;border-radius:50%;background:#facc15;border:3px solid #111;box-shadow:0 2px 6px rgba(0,0,0,.4)"></div>',
+        iconSize: [28, 28], iconAnchor: [14, 28], popupAnchor: [0, -28]
+    });
+}
+
+function canLoadImage(url) {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => resolve(true);
+        img.onerror = () => resolve(false);
+        img.src = url;
+    });
+}
+
+// シートのパスからファイル名だけ取り出し、複数の候補を順に試す
+async function resolvePinIcon(rawUrl) {
+    const cleaned = rawUrl.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+    const fileName = cleaned.split('/').pop();
+    const candidates = [cleaned, PIN_DIR + fileName, './' + fileName, './pin/' + fileName, './images/' + fileName, RAW_BASE + fileName, CDN_BASE + fileName];
+    for (const url of candidates) {
+        if (await canLoadImage(url)) {
+            return L.icon({ iconUrl: url, iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32] });
+        }
+    }
+    console.warn('❌ ピン画像が見つかりません:', cleaned, '→ 試した場所:', candidates);
+    missingPins.push(fileName);
+    return makeFallbackIcon();
+}
+
+/* ============================================================
+ * 起動: スプレッドシートの読み込み
+ * ============================================================ */
 async function initApp() {
     try {
         const [coordsData, statusData, pricesData, iconData, bannerData, deadlineData, guideData] = await Promise.all([
             fetchCSV('店舗座標一覧'), fetchCSV('開催状況集計'), fetchCSV('Prices'), fetchCSV('icon'), fetchCSV('ヘッダーバナー'), fetchCSV('申込期日'), fetchCSV('説明文')
         ]);
+        window.__GUIDES = parseGuideSheet(guideData); // 商材ゾーンの説明文(空なら初期文言を使用)
         if(coordsData.length === 0) showError("⚠️ 店舗データが取得できませんでした。");
 
+        // --- ヘッダーバナー ---
         if(bannerData && bannerData.length > 1) {
             const bannerUrl = bannerData[1][0]; const bannerLink = bannerData[1][1];
             if(bannerUrl) {
                 const img = document.getElementById('header-banner');
-                if(img){ img.src = getRawUrl(bannerUrl); img.style.display = 'block'; if(bannerLink) img.onclick = () => window.open(bannerLink, '_blank'); }
+                if(img){ img.src = bannerUrl.trim(); img.style.display = 'block'; if(bannerLink) img.onclick = () => window.open(bannerLink, '_blank'); }
             }
         }
 
+        // --- Icon(複数の候補パスを試して、読める画像を使う) ---
         if(iconData && iconData.length > 1) {
             for(let i=1; i<iconData.length; i++) {
                 if(iconData[i][0] && iconData[i][1]) {
                     const catName = iconData[i][0].trim();
-                    const iconObj = L.icon({ 
-                        iconUrl: getRawUrl(iconData[i][1]), 
-                        iconSize: [32, 32], 
-                        iconAnchor: [16, 32], 
-                        popupAnchor: [0, -32] 
-                    });
+                    const iconObj = await resolvePinIcon(iconData[i][1]);
                     icons[catName] = iconObj;
                     if (catName === '専門店') { defaultIconObj = iconObj; }
                 }
             }
         }
+        if (missingPins.length > 0) {
+            showError("⚠ ピン画像が見つかりません: " + [...new Set(missingPins)].join(', ') + "(GitHubの images/pin を確認)");
+        }
         if (!defaultIconObj && Object.keys(icons).length > 0) { defaultIconObj = icons[Object.keys(icons)[0]]; }
 
+        // --- Prices(商材) ---
         if(pricesData && pricesData.length > 0) {
             let pHead = pricesData[0];
             let startIdx = 1;
@@ -139,13 +205,13 @@ async function initApp() {
             const pNote = getColIndex(pHead, ['増減額', 'デザイン']) !== -1 ? getColIndex(pHead, ['増減額', 'デザイン']) : 3;
             const pPoint = getColIndex(pHead, ['POINT']) !== -1 ? getColIndex(pHead, ['POINT']) : 4;
             const pImg = getColIndex(pHead, ['画像URL', '画像']) !== -1 ? getColIndex(pHead, ['画像URL', '画像']) : 5;
-            
+
             let currentProd = null;
             for(let i=startIdx; i<pricesData.length; i++) {
                 const row = pricesData[i];
                 if(!row || !row[pTitle]) continue;
                 if(!currentProd || currentProd.title !== row[pTitle]) {
-                    currentProd = { title: row[pTitle], point: (row[pPoint] || ''), imageUrl: getRawUrl(row[pImg]), options: [] };
+                    currentProd = { title: row[pTitle], point: (row[pPoint] || ''), imageUrl: row[pImg] ? row[pImg].trim() : '', options: [] };
                     products.push(currentProd);
                 }
                 currentProd.options.push({ label: (row[pOpt] || ''), price: (row[pPrice] || ''), note: (row[pNote] || '') });
@@ -155,29 +221,7 @@ async function initApp() {
             products = [{ title: 'データがありません', point: '', imageUrl: '', options: [{label: '-', price: '-', note: '-'}] }];
         }
 
-        let parsedGuides = { common: { warning: [], flow: [], rule: [] }, items: {} };
-        if (guideData && guideData.length > 1) {
-            for(let i=1; i<guideData.length; i++) {
-                const row = guideData[i];
-                if (!row || row.length < 3) continue;
-                const t = String(row[0] || '').trim();
-                const ty = String(row[1] || '').trim();
-                const val = String(row[2] || '').trim();
-                if(!t || !val) continue;
-                
-                if (t === '共通') {
-                    if (ty === '警告') parsedGuides.common.warning.push(val);
-                    else if (ty === '流れ') parsedGuides.common.flow.push(val);
-                    else if (ty === '基本ルール') parsedGuides.common.rule.push(val);
-                } else {
-                    if (!parsedGuides.items[t]) parsedGuides.items[t] = { spec: [], note: [] };
-                    if (ty === '仕様') parsedGuides.items[t].spec.push(val);
-                    else if (ty === '注意') parsedGuides.items[t].note.push(val);
-                }
-            }
-        }
-        window.__GUIDES = parsedGuides;
-
+        // --- 開催状況集計 → 住所(表記ゆれを揃えたもの)と店舗名の両方で引けるようにする ---
         const statusByAddr = {}, statusByName = {};
         if(statusData && statusData.length > 0) {
             const stHead = statusData[0];
@@ -191,13 +235,14 @@ async function initApp() {
             const jCol = getColIndex(stHead, ['店舗内装飾ジャック']);
             const unCol = getColIndex(stHead, ['施設情報']);
             const nmCol = getColIndex(stHead, ['店舗名']);
-            const showCol = getColIndex(stHead, ['MAP表示']);
+            const showCol = getColIndex(stHead, ['MAP表示']);   // MAP表示 ON/OFF(空欄は ON 扱い)
 
             for(let i=1; i<statusData.length; i++) {
                 const row = statusData[i];
                 const addr = aCol !== -1 ? (row[aCol] || '').trim() : '';
                 const nm = nmCol !== -1 ? (row[nmCol] || '').trim() : '';
-                if (showCol !== -1 && ['OFF', '非表示'].includes(String(row[showCol] || '').trim().toUpperCase())) {
+                // 「MAP表示」が OFF の店舗は、地図にもリストにも出さない
+                if (showCol !== -1 && isOffValue(row[showCol])) {
                     if (addr) hiddenAddr.add(normAddr(addr));
                     if (nm) hiddenName.add(nm);
                 }
@@ -216,6 +261,7 @@ async function initApp() {
         }
         const emptyStat = { updatedAt: '', poster: 'ー', register: 'ー', tissue: 'ー', gate: 'ー', jack: 'ー', unavailable: '' };
 
+        // --- 店舗座標一覧(A〜F列: 店舗名・都道府県・カテゴリ・住所・緯度・経度) ---
         if(coordsData && coordsData.length > 0) {
             const coHead = coordsData[0];
             const cNameCol = getColIndex(coHead, ['店舗名']); const cCatCol = getColIndex(coHead, ['カテゴリ']);
@@ -226,12 +272,13 @@ async function initApp() {
                 const addr = cAddrCol !== -1 ? (row[cAddrCol] || '').trim() : '';
                 if(!addr || cLatCol === -1 || cLngCol === -1 || !row[cLatCol] || !row[cLngCol]) continue;
                 const storeName = cNameCol !== -1 ? String(row[cNameCol] || '').trim() : '';
-                if (hiddenAddr.has(normAddr(addr)) || hiddenName.has(storeName)) continue;
+                if (hiddenAddr.has(normAddr(addr)) || hiddenName.has(storeName)) { hiddenCount++; continue; } // MAP表示 = OFF
 
                 const stat = statusByAddr[normAddr(addr)] || statusByName[storeName] || emptyStat;
                 const locInfo = extractPrefAndCity(addr);
 
                 let catName = cCatCol !== -1 ? (row[cCatCol] || '').trim() : '';
+                // アイコンリストに未登録のカテゴリは「専門店」に書き換えて集約
                 if (catName && !icons[catName]) { catName = '専門店'; }
 
                 stores.push({
@@ -243,18 +290,28 @@ async function initApp() {
                 });
             }
         }
+        if(stores.length === 0) {
+            showError(`⚠ 表示できる店舗が0件です(座標シート:${coordsData.length}行 / 開催状況:${statusData.length}行 / MAP表示OFFで除外:${hiddenCount}件)`);
+        }
 
         initMap();
         initSearchUI();
-        initProductZone();
-        renderDeadlines(deadlineData);
-        filterMap();
-        setView(DEFAULT_VIEW, false);
+        initProductZone();                 // ④ 商材ゾーン
+        renderDeadlines(deadlineData);     // ③ 申込期日の進捗ゾーン
+        filterMap();                       // ⑦ 件数とリストを作る
+        setView(DEFAULT_VIEW, false);      // ⑥ リスト/MAP の初期表示
         getUserLocation(true);
 
     } catch(err) { console.error(err); showError("⚠️ システムエラーが発生しました。"); }
 }
 
+// 「MAP表示」列の値が OFF 相当か(空欄・ON は表示)。チェックボックス(FALSE)は対象外 → ON/OFFのプルダウンで運用
+function isOffValue(v) {
+    const t = String(v == null ? '' : v).trim().toUpperCase();
+    return ['OFF', '非表示'].includes(t);
+}
+
+// 広告実績の値(○ × ー など)を、太さの揃った記号(SVG)のHTMLに変換する(size: 記号の大きさ)
 function recordBadge(v, size = 28) {
     const t = (v || '').toString().trim();
     if(['○', '◯', '〇', 'o', 'O'].includes(t)) {
@@ -267,18 +324,22 @@ function recordBadge(v, size = 28) {
     return `<span class="rec-badge rec-other">${esc(t)}</span>`;
 }
 
+/* ============================================================
+ * 地図
+ * ============================================================ */
 function initMap() {
     map = L.map('map', { doubleClickZoom: true, tap: false }).setView([35.6895, 139.6917], 5);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
 
     map.on('click', () => { if(searchOpen) toggleSearch(); });
     map.on('dragstart', () => { if(searchOpen) toggleSearch(); });
+    // ポップアップが地図の上端からはみ出したら、見える位置まで地図を動かす(上の切り替えバーの下に隠れないように)
     map.on('popupopen', () => setTimeout(() => {
         const pop = document.querySelector('.leaflet-popup'); if(!pop) return;
         const pr = pop.getBoundingClientRect(), mr = map.getContainer().getBoundingClientRect();
         const over = mr.top + 10 - pr.top;
         if(over > 0) map.panBy([0, -over]);
-    }, 500));
+    }, 500)); // Leaflet自身の自動移動(約0.25秒)が終わってから補正する
 
     const bounds = [];
     stores.forEach(store => {
@@ -319,12 +380,19 @@ function getUserLocation(isInit = false) {
         (pos) => {
             userLat = pos.coords.latitude; userLng = pos.coords.longitude;
             if(userMarker) map.removeLayer(userMarker);
+
             const userIcon = L.divIcon({ className: 'custom-user-marker', html: '<div class="user-pulse"></div>', iconSize: [20, 20], iconAnchor: [10, 10] });
             userMarker = L.marker([userLat, userLng], {icon: userIcon}).addTo(map).bindPopup("<b style='font-size:12px;'>現在地</b>");
+
             const z = isInit ? 10 : 12; runOnMap(() => map.setView([userLat, userLng], z));
-            filterMap();
+            // 「現在地から半径」で検索中なら、基準の位置を更新する
+            if(searchState.mode === 'radius' && searchState.center && searchState.center.type === 'current') {
+                searchState.center = { lat: userLat, lng: userLng, label: '現在地', type: 'current' }; drawRadiusOverlay();
+            }
+            filterMap(); // 距離・並び順・件数を更新
+            updateCenterLabel();
         },
-        (err) => { console.warn("位置取得に失敗しました"); }
+        (err) => { console.warn("位置取得に失敗しました"); updateCenterLabel(); }
     );
 }
 
@@ -332,12 +400,20 @@ window.recenterMap = function() {
     if(userLat && userLng) { map.setView([userLat, userLng], 12); } else { getUserLocation(false); }
 }
 
+/* ============================================================
+ * ⑤ 検索・ソート
+ *   エリア(都道府県・市区町村) / 半径(現在地 or 地点指定) / キーワード のどれか1つだけを使う
+ * ============================================================ */
 function initSearchUI() {
     const rawPrefs = [...new Set(stores.map(s => s.pref).filter(Boolean))];
     rawPrefs.sort((a, b) => { let ia = PREF_ORDER.indexOf(a); let ib = PREF_ORDER.indexOf(b); if(ia === -1) ia = 999; if(ib === -1) ib = 999; return ia - ib; });
     const pSel = document.getElementById('pref-select');
     if(pSel) { rawPrefs.forEach(p => { const opt = document.createElement('option'); opt.value = p; opt.textContent = p; pSel.appendChild(opt); }); }
-    
+
+    // 半径のクイック選択
+    const chips = document.getElementById('radius-chips');
+    if(chips) { chips.innerHTML = [1, 3, 5, 10, 20, 50].map(km => `<span class="cat-chip" onclick="setRadiusValue(${km})">${km}km</span>`).join(''); }
+
     const catCont = document.getElementById('category-filters');
     const cats = [...new Set(stores.map(s => s.category).filter(Boolean))];
     activeCategories = [...cats];
@@ -366,12 +442,15 @@ function initSearchUI() {
         }
         renderCategoryButtons();
 
+        // すべての検索条件を初期状態に戻す
         window.resetFilters = function() {
-            const rInp = document.getElementById('radius-input'); if(rInp) rInp.value = '';
+            ['radius-input', 'keyword-input', 'addr-input'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
             const pSel2 = document.getElementById('pref-select'); if(pSel2) pSel2.value = '';
             updateCities();
             const unav = document.getElementById('show-unavailable'); if(unav) unav.checked = true;
+            pickedPoint = null; addrCandidates = []; renderAddrResults(); setCenterType('current');
             searchState = { mode: 'none', pref: '', city: '', radius: 0, center: null, keyword: '' };
+            clearRadiusOverlay();
             activeCategories = [...cats];
             renderCategoryButtons();
             catCont.scrollLeft = 0;
@@ -379,6 +458,7 @@ function initSearchUI() {
             runOnMap(() => { if(userLat && userLng) { map.setView([userLat, userLng], 10); } else { fitStores(stores); } });
         };
     }
+    updateCenterLabel(); updateSummary();
 }
 
 window.updateCities = function() {
@@ -392,40 +472,608 @@ window.updateCities = function() {
     }
 }
 
-function fitStores(list) {
+// 検索方法のタブ切り替え(画面の切り替えだけ。「検索」ボタンを押すまで絞り込みは変わりません)
+window.setSearchMode = function(mode) {
+    ['region', 'radius', 'keyword'].forEach(m => {
+        const b = document.getElementById('mode-' + m), p = document.getElementById('pane-' + m);
+        if(b) b.classList.toggle('active', m === mode); if(p) p.classList.toggle('view-hidden', m !== mode);
+    });
+}
+
+// ----- 半径: 基準(現在地 / 地点を指定) -----
+window.setCenterType = function(type) {
+    centerType = type;
+    const bc = document.getElementById('center-current'), bp = document.getElementById('center-point-btn'), box = document.getElementById('center-point');
+    if(bc) bc.classList.toggle('active', type === 'current'); if(bp) bp.classList.toggle('active', type === 'point');
+    if(box) box.classList.toggle('view-hidden', type !== 'point');
+    updateCenterLabel();
+}
+
+function updateCenterLabel() {
+    const el = document.getElementById('center-label'); if(!el) return;
+    if(centerType === 'current') {
+        el.textContent = (userLat !== null) ? '基準: 現在地' : '基準: 現在地(位置情報を取得できていません)';
+    } else {
+        el.textContent = pickedPoint ? `基準: ${pickedPoint.label}` : '基準: 住所などを検索して、地点を選んでください';
+    }
+}
+
+window.setRadiusValue = function(km) { const el = document.getElementById('radius-input'); if(el) el.value = km; }
+
+// 住所・駅名・地名から地点を探す(国土地理院の住所検索 → 見つからなければ OpenStreetMap)
+window.searchAddress = async function() {
+    const q = (document.getElementById('addr-input')?.value || '').trim();
+    if(!q) { showNotice('住所や駅名などを入力してください'); return; }
+    const box = document.getElementById('addr-results');
+    if(box) box.innerHTML = '<div class="addr-msg">検索中…</div>';
+    let list = [];
+    try {
+        const r = await fetch('https://msearch.gsi.go.jp/address-search/AddressSearch?q=' + encodeURIComponent(q));
+        if(r.ok) {
+            const j = await r.json();
+            list = (j || []).slice(0, 6).map(f => ({ lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], label: (f.properties && f.properties.title) || q }));
+        }
+    } catch(e) { /* 次の方法を試す */ }
+    if(list.length === 0) {
+        try {
+            const r = await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&countrycodes=jp&accept-language=ja&q=' + encodeURIComponent(q));
+            if(r.ok) {
+                const j = await r.json();
+                list = (j || []).map(f => ({ lat: parseFloat(f.lat), lng: parseFloat(f.lon), label: (f.display_name || q).split(',').slice(0, 3).reverse().join(' ').trim() }));
+            }
+        } catch(e) { /* 見つからない扱い */ }
+    }
+    addrCandidates = list; renderAddrResults(list.length === 0 ? '見つかりませんでした。別の書き方(市区町村名から等)をお試しください' : '');
+}
+
+function renderAddrResults(msg) {
+    const box = document.getElementById('addr-results'); if(!box) return;
+    if(msg) { box.innerHTML = `<div class="addr-msg">${esc(msg)}</div>`; return; }
+    box.innerHTML = addrCandidates.map((c, i) => `<button type="button" class="addr-item" onclick="pickAddress(${i})">📍 ${esc(c.label)}</button>`).join('');
+}
+
+window.pickAddress = function(i) {
+    const c = addrCandidates[i]; if(!c) return;
+    pickedPoint = { lat: c.lat, lng: c.lng, label: c.label, type: 'point' };
+    addrCandidates = []; renderAddrResults(); updateCenterLabel();
+    setCenterMarker(pickedPoint);
+    runOnMap(() => map.setView([c.lat, c.lng], 13));
+    showNotice('地点を選びました。半径を入力して「検索」を押してください');
+}
+
+// ----- 地図上の目印(選択地点の旗・半径の円) -----
+function setCenterMarker(c) {
+    if(centerMarker) { map.removeLayer(centerMarker); centerMarker = null; }
+    if(!c || c.type !== 'point') return;
+    const icon = L.divIcon({ className: '', html: '<div class="center-pin"></div>', iconSize: [22, 22], iconAnchor: [11, 11] });
+    centerMarker = L.marker([c.lat, c.lng], { icon, interactive: false }).addTo(map);
+}
+
+function drawRadiusOverlay() {
+    if(radiusCircle) { map.removeLayer(radiusCircle); radiusCircle = null; }
+    const st = searchState; if(st.mode !== 'radius' || !st.center) return;
+    radiusCircle = L.circle([st.center.lat, st.center.lng], { radius: st.radius * 1000, color: '#eab308', weight: 2, fillColor: '#facc15', fillOpacity: 0.12, interactive: false }).addTo(map);
+    setCenterMarker(st.center);
+}
+
+function clearRadiusOverlay() {
+    if(radiusCircle) { map.removeLayer(radiusCircle); radiusCircle = null; }
+    if(centerMarker) { map.removeLayer(centerMarker); centerMarker = null; }
+}
+
+// 指定した店舗がすべて入る範囲に地図を動かす
+function fitStores(list, extraPoint) {
     const pts = list.filter(s => !isNaN(s.lat) && !isNaN(s.lng)).map(s => [s.lat, s.lng]);
+    if(extraPoint) pts.push(extraPoint);
     if(pts.length > 0) map.fitBounds(pts, { padding: [50, 50], maxZoom: 15 });
 }
 
-window.applySearch = function() {
-    const km = parseFloat(document.getElementById('radius-input')?.value || '');
-    const pref = document.getElementById('pref-select')?.value || '';
-    const city = document.getElementById('city-select')?.value || '';
-
-    if (km > 0) {
-        if(userLat === null) { showNotice('現在地を取得できていません'); return; }
-        const center = { lat: userLat, lng: userLng, label: '現在地', type: 'current' };
-        searchState = { mode: 'radius', pref: '', city: '', radius: km, center: center, keyword: '' };
-    } else if (pref || city) {
-        searchState = { mode: 'region', pref: pref, city: city, radius: 0, center: null, keyword: '' };
-    } else {
-        window.resetFilters();
-        if(searchOpen) toggleSearch();
-        return;
-    }
-    
+function finishSearch(fitFn, emptyMsg) {
     filterMap();
     const visible = stores.filter(isStoreVisible);
-    if(visible.length === 0) showNotice('条件に合う店舗がありません');
-    runOnMap(() => fitStores(visible));
+    if(visible.length === 0 && emptyMsg) showNotice(emptyMsg);
+    if(fitFn) runOnMap(fitFn);
     if(searchOpen) toggleSearch();
     scrollToToggle();
-};
+}
 
+// ----- エリア(都道府県・市区町村)で検索 → 半径・キーワードはリセット -----
+window.applyRegion = function() {
+    const pref = document.getElementById('pref-select')?.value || '', city = document.getElementById('city-select')?.value || '';
+    ['radius-input', 'keyword-input', 'addr-input'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+    pickedPoint = null; addrCandidates = []; renderAddrResults(); setCenterType('current');
+    clearRadiusOverlay();
+    searchState = { mode: (pref || city) ? 'region' : 'none', pref, city, radius: 0, center: null, keyword: '' };
+    finishSearch(() => fitStores(stores.filter(isStoreVisible)), '条件に合う店舗がありません');
+}
+
+// ----- 半径で検索(現在地 / 選択地点) → エリア・キーワードはリセット -----
+window.applyRadius = function() {
+    const km = parseFloat(document.getElementById('radius-input')?.value || '');
+    if(!(km > 0)) { showNotice('半径(km)を入力してください'); return; }
+    let center = null;
+    if(centerType === 'current') {
+        if(userLat === null) { showNotice('現在地を取得できていません。「地点を指定」をお使いください'); getUserLocation(false); return; }
+        center = { lat: userLat, lng: userLng, label: '現在地', type: 'current' };
+    } else {
+        if(!pickedPoint) { showNotice('先に住所などを検索して、地点を選んでください'); return; }
+        center = pickedPoint;
+    }
+    const pSel = document.getElementById('pref-select'); if(pSel) pSel.value = ''; updateCities();
+    const kw = document.getElementById('keyword-input'); if(kw) kw.value = '';
+    searchState = { mode: 'radius', pref: '', city: '', radius: km, center, keyword: '' };
+    drawRadiusOverlay();
+    finishSearch(() => { if(radiusCircle) map.fitBounds(radiusCircle.getBounds(), { padding: [30, 30] }); }, `半径${km}km以内に店舗がありません`);
+}
+
+// ----- キーワード(店舗名・住所・市区町村)で検索 → エリア・半径はリセット -----
+window.applyKeyword = function() {
+    const kw = (document.getElementById('keyword-input')?.value || '').trim();
+    const pSel = document.getElementById('pref-select'); if(pSel) pSel.value = ''; updateCities();
+    ['radius-input', 'addr-input'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+    pickedPoint = null; addrCandidates = []; renderAddrResults(); setCenterType('current');
+    clearRadiusOverlay();
+    searchState = { mode: kw ? 'keyword' : 'none', pref: '', city: '', radius: 0, center: null, keyword: kw };
+    finishSearch(() => fitStores(stores.filter(isStoreVisible)), '条件に合う店舗がありません');
+}
+
+function updateSummary() {
+    const el = document.getElementById('search-summary'); if(!el) return;
+    const st = searchState;
+    let t = '全国の店舗';
+    if(st.mode === 'region') t = [st.pref, st.city].filter(Boolean).join(' ');
+    if(st.mode === 'radius') t = `${st.center.label} から ${st.radius}km以内`;
+    if(st.mode === 'keyword') t = `「${st.keyword}」`;
+    el.textContent = t;
+}
+
+// 検索条件(エリア / 半径 / キーワード のどれか1つ + カテゴリ + 掲載不可)に合う店舗か。地図とリストで共通
 function isStoreVisible(s) {
     const st = searchState;
     if(!activeCategories.includes(s.category)) return false;
     const elUnav = document.getElementById('show-unavailable');
     if(elUnav && !elUnav.checked && s.unavailable !== '') return false;
-    
     if(st.mode === 'region') {
+        if(st.pref && s.pref !== st.pref) return false;
+        if(st.city && s.city !== st.city) return false;
+    } else if(st.mode === 'radius' && st.center) {
+        if(getDistance(st.center.lat, st.center.lng, s.lat, s.lng) > st.radius) return false;
+    } else if(st.mode === 'keyword') {
+        const tokens = st.keyword.split(/[\s\u3000]+/).map(normText).filter(Boolean);
+        if(!tokens.every(t => s.searchText.includes(t))) return false;
+    }
+    return true;
+}
+
+window.filterMap = function() {
+    stores.forEach(s => {
+        if(!s.marker) return;
+        const v = isStoreVisible(s);
+        if(v) { if(!map.hasLayer(s.marker)) s.marker.addTo(map); } else { if(map.hasLayer(s.marker)) map.removeLayer(s.marker); }
+    });
+    updateSummary();
+    renderStoreList(true);
+}
+
+function toggleSearch() {
+    searchOpen = !searchOpen; const panel = document.getElementById('search-contents'), chev = document.getElementById('search-chevron');
+    if(panel) panel.classList.toggle('view-hidden', !searchOpen);
+    if(chev) chev.style.transform = searchOpen ? 'rotate(180deg)' : 'rotate(0deg)';
+}
+
+/* ============================================================
+ * ④ 商材ゾーン(商材ボタンで内容が切り替わる)
+ * ============================================================ */
+function initProductZone() {
+    const tabs = document.getElementById('product-tabs'); if(!tabs) return;
+    tabs.innerHTML = '';
+    const n = products.length;
+    tabs.style.gridTemplateColumns = `repeat(${n <= 3 ? Math.max(n, 1) : (n === 4 ? 2 : 3)}, 1fr)`;
+    products.forEach((p, i) => {
+        const t = document.createElement('div'); t.className = `prod-tab ${i === 0 ? 'active' : ''}`;
+        t.innerText = getShortTabName(p.title);
+        t.onclick = () => selectTab(i); tabs.appendChild(t);
+    });
+    if(products.length > 0) renderProductContent(0);
+}
+
+function selectTab(index) {
+    document.querySelectorAll('.prod-tab').forEach((t, i) => { t.className = `prod-tab ${i === index ? 'active' : ''}`; });
+    renderProductContent(index);
+}
+
+function renderProductContent(index) {
+    const prod = products[index]; if(!prod) return;
+    let optsHtml = prod.options.map((opt, i) => `<option value="${i}">${esc(opt.label)}</option>`).join('');
+    const content = document.getElementById('product-content'); if(!content) return;
+
+    content.innerHTML = `
+        <h2 class="text-[17px] font-bold mb-4 leading-snug text-gray-800">${esc(prod.title || '')}</h2>
+        ${prod.imageUrl ? `<img src="${esc(prod.imageUrl)}" class="product-image" alt="画像" onerror="this.style.display='none'">` : ''}
+        <div class="bg-yellow-50 p-3.5 rounded-lg border border-yellow-200 mb-5"><span class="bg-yellow-400 text-xs font-bold px-2.5 py-1 rounded">POINT</span><p class="text-sm mt-2 text-gray-700">${esc(prod.point || '')}</p></div>
+        <div class="border border-gray-200 rounded-xl p-4 bg-white shadow-sm">
+            <label class="text-xs text-gray-500 font-bold mb-2 block">数量・期間を選択</label>
+            <select id="lot-select" class="stylish-select w-full mb-4 bg-gray-50" onchange="updatePrice(${index}, this.value)">${optsHtml}</select>
+            <div class="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                <div class="text-xs text-gray-500 font-bold mb-1">料金</div>
+                <div class="text-3xl font-bold mb-2 text-gray-900">
+                    <span id="price-display">${esc(prod.options[0]?.price || '')}</span>
+                    <span class="text-sm font-normal text-gray-500">（税別）</span>
+                </div>
+                <div class="text-xs text-red-500 font-bold" id="note-display">${esc(prod.options[0]?.note || '')}</div>
+            </div>
+        </div>
+        ${renderGuide(prod)}`;
+}
+
+window.updatePrice = function(pIdx, oIdx) {
+    const opt = products[pIdx].options[oIdx];
+    if(opt){
+        const pDisp = document.getElementById('price-display'); const nDisp = document.getElementById('note-display');
+        if(pDisp) pDisp.innerText = opt.price; if(nDisp) nDisp.innerText = opt.note;
+    }
+}
+
+/* ============================================================
+ * 掲載までの流れ・期日・注意事項(商材ボタンで切り替わる / アコーディオン)
+ *
+ *   文章は、スプレッドシートの「説明文」タブから読み込みます。 列: A=項目 / B=種別 / C=内容
+ *     項目「共通」   … 種別: 警告 / 流れ / 基本ルール
+ *     項目「商材名」 … 種別: 仕様 / 注意 / 素材入稿日数(数字・任意) / 制作の目安(文字・任意)
+ *   ※「流れ」の行は、先頭が「※」の行を、直前の手順の補足として表示します。
+ *   「説明文」タブが空・ないときは、下の初期文言(GUIDE_ で始まるもの)を使います。
+ * ============================================================ */
+const GUIDE_NOTICE = '店舗単位での都度確認になりますので「掲載可能店舗一覧」等のご用意はありません。希望実施ドンキ店舗を必ず選択してご依頼下さい。';
+const CONFIRM_BDAYS = 5; // 開催確認に必要な営業日数(平均)
+
+const GUIDE_FLOW_DEFAULT = [
+    '店舗と相談して案件を決定する(商材・期間・実施希望ドンキ店舗名・数量)',
+    '※商材、数量はこの時点ではまだ確定でなくてもOKです',
+    '※制作に日数がかかるので、ご相談はお早めにお願いします',
+    '開催可能か確認する(開催確認依頼メールを送付)',
+    '※5営業日程度かかります(ドンキ店舗ごとの判断のため、もっとかかる場合もあります)',
+    '実施可否を店舗に連絡する',
+    '※ドンキ判断でお断りする場合があります',
+    '獲得が決まったら、獲得報告メールを送る',
+    '※この時点で全ての内容が確定となり、以降、店舗都合のキャンセルは承れません',
+    '素材(デザイン)を店舗から回収して、メールで送る',
+    '※商材ごとにテンプレートや注意事項が異なるため、各商材の項目を必ずご確認ください'
+];
+const GUIDE_RULES_DEFAULT = [
+    '申込期日(ドンキAD申請期日): 原則、開催開始日の1か月前です。事前に店舗と相談して、実施可否を決定してからの申請となります',
+    '開催確認に必要な日数: 平均5営業日です(広告内容により変動します)',
+    '素材(デザイン)入稿期限: 商材によって異なります(各商材の項目をご確認ください)'
+];
+
+// 商材ごとの初期設定。matDays: 素材入稿期限(開催日の何日前か) / lead: 制作にかかる日数の目安
+const GUIDE_DEFAULTS = {
+    poster: { name: 'A1ポスター', matDays: 21, lead: '約3週間', matText: '開催日の3週間前', startDays: [1, 16],
+        sections: [
+            { h: '掲示について', items: [
+                '基本的に掲載開始日は毎月1日、16日でお願いします',
+                '掲示場所の指定はできません。お客様の導線ではない場所や、他のポスターと同じ場所に掲載される場合があります。希望があれば、事前に掲示予定場所のお写真をお送りします(お時間をいただきます)',
+                '掲示タイミングは、開始日の夕方以降になる場合があります',
+                '1か月以内の差し替えは1回につき10,000円で承ります(店舗様にて作成・持ち込みをしていただければ無料)',
+                '店舗の壁に掲示します。※什器を使う場合は、事前に可能かドンキ側に相談する必要があります。また、什器はパチンコ店様で購入していただきます'] },
+            { h: 'サイズ', items: ['A1(594mm×841mm) 縦', '他サイズ希望の際はご相談ください(可能か確認します)。なお、ポスターサイズが小さくなっても価格は変わりません'] },
+            { h: '素材(デザイン)受付期限', items: ['開催日の3週間前'] }
+        ] },
+    box: { name: 'ボックスティッシュ', matDays: 75, lead: '約2か月', matText: '開催日目安の2か月半前(個数が多い場合は前倒しになる可能性があります)',
+        sections: [
+            { h: 'テンプレート', items: ['専用テンプレート有(店舗様でデザインいただける場合は、受注後にお渡しします)'] },
+            { h: '素材(デザイン)受付期限', items: ['開催日目安の2か月半前(個数が多い場合は前倒しになる可能性があります)'] },
+            { h: '注意事項', items: ['販売場所の指定はできません', '販売開始タイミングは、開始希望日から数日ずれる場合があります'] },
+            { h: '特記事項', items: [
+                'A1ポスターと床シールを一緒に掲示いたします。テンプレートはございませんが、サイズの指定がございます。こちらもaiファイルで作成をお願いいたします',
+                'A1サイズポスター: 縦向き、A1サイズ(※847×600mm)',
+                '床面広告(シール): 横向き、A1サイズ(※600×847mm)',
+                '※料金に含まれていますので、別途金額はかかりません'] }
+        ] },
+    pocket: { name: 'ポケットティッシュ', matDays: 30, lead: '約1か月', matText: '開催日目安の1か月前(個数が多い場合は前倒しになる可能性があります)',
+        sections: [
+            { h: '素材について', items: [
+                'サイズとデザイン: 既定のテンプレートに沿って作成をお願いします。テンプレートは[こちら](https://dmm-amu.cybozu.com/k/808/show#record=325&tab=comments&mode=show&s.keyword=%25E3%2583%2589%25E3%2583%25B3%25E3%2582%25AD&s.app=808)からダウンロードしてください',
+                '必ず「18歳未満は入店禁止です」という文言を入れてください',
+                'ファイル形式: イラレデータ(aiファイル)。データ作成時には「CMYKカラー」でお願いします。「RGB」でデータをいただいても、印刷時には「CMYK」に変換されます。この場合は色味が少し変わってしまいますので、ご了承ください'] },
+            { h: '素材(デザイン)受付期限', items: ['開催日目安の1か月前(個数が多い場合は前倒しになる可能性があります)'] },
+            { h: '注意事項', items: [
+                '配布開始タイミングは、開始希望日から数日ずれる場合があります',
+                '配布対象者は、成人済みの方のみになります',
+                '基本的に、客数の少ない深夜には配布せず、日中の配布になりますが、店舗によります。指示がなければ配布時間は店舗任せになるため、配布時間に要望がある場合は事前にお知らせください',
+                '配布するレジについては店舗都合に任せておりますので、全レジで配布することをお約束するものではございません。ただし、ご契約する数量を配り終えるまでは必ず配布いたします。ピークタイムやレジ研修など、配布できないタイミングがございます',
+                'セミセルフレジの場合は、手渡しではなく、お客様のカゴにドンキスタッフが入れます。8割以上の店舗がセミセルフ・フルセルフレジに切り替わっておりますので、ポケットティッシュ配布案件は、基本かご入れになります'] }
+        ] },
+    gate: { name: 'インパクトゲート', matDays: 45, lead: '約1か月半', matText: '開催日目安の1か月半前(前倒しになる可能性があります)',
+        sections: [
+            { h: 'サイズ・テンプレート', items: ['専用テンプレート有(店舗様でデザインいただける場合は、受注後にお渡しします。店舗により防犯ゲートの形が異なるため、都度ご案内します)'] },
+            { h: 'データ形式', items: ['イラレデータ(aiファイル)'] },
+            { h: '素材(デザイン)受付期限', items: ['開催日目安の1か月半前(前倒しになる可能性があります)'] },
+            { h: '注意事項', items: ['掲示タイミングは、開始日の夕方以降になる場合があります', '店舗様での印刷と持ち込みはNGです。※防犯機能等の問題からトラブル回避のため'] }
+        ] },
+    jack: { name: '店舗内装飾ジャック', matDays: null, lead: '', matText: '', sections: [] }
+};
+
+// 商材名から種類を判定する(「説明文」タブの商材名とPricesの商材名が少し違っても結びつけられるように)
+function productKind(title) {
+    const t = String(title || '');
+    if(t.includes('ポケット') || t.includes('手渡し')) return 'pocket';
+    if(t.includes('ボックス') || t.includes('BOX') || t.includes('ＢＯＸ')) return 'box';
+    if(t.includes('ポスター')) return 'poster';
+    if(t.includes('ゲート')) return 'gate';
+    if(t.includes('ジャック') || t.includes('装飾')) return 'jack';
+    return '';
+}
+
+// 「説明文」タブ → { common: {warning, flow, rule}, items: { 商材名: {spec, note, matDays, lead} } }
+function parseGuideSheet(data) {
+    const g = { common: { warning: [], flow: [], rule: [] }, items: {} };
+    if(!data || data.length < 2) return g;
+    for(let i = 1; i < data.length; i++) {
+        const row = data[i] || [];
+        const t = String(row[0] || '').trim(), ty = String(row[1] || '').trim(), val = String(row[2] || '').trim();
+        if(!t || !ty || !val) continue;
+        if(t === '共通') {
+            if(ty === '警告') g.common.warning.push(val);
+            else if(ty === '流れ') g.common.flow.push(val);
+            else if(ty === '基本ルール') g.common.rule.push(val);
+        } else {
+            const it = g.items[t] = g.items[t] || { spec: [], note: [], matDays: null, lead: '' };
+            if(ty === '仕様') it.spec.push(val);
+            else if(ty === '注意') it.note.push(val);
+            else if(ty === '素材入稿日数') { const n = parseInt(val, 10); if(n > 0) it.matDays = n; }
+            else if(ty === '制作の目安') it.lead = val;
+        }
+    }
+    return g;
+}
+
+// その商材の「説明文」タブの行を探す(同じ名前 → 含む → 同じ種類 の順)
+function guideItemFor(prod) {
+    const G = window.__GUIDES; if(!G) return null;
+    const title = String(prod.title || ''), keys = Object.keys(G.items);
+    if(G.items[title]) return G.items[title];
+    let k = keys.find(x => title.includes(x) || x.includes(title));
+    if(!k && productKind(title)) k = keys.find(x => productKind(x) === productKind(title));
+    return k ? G.items[k] : null;
+}
+
+// 「[表示する文字](URL)」と「[[表示する文字|URL]]」をリンクにする(それ以外の文字は無害化)
+function guideText(s) {
+    return esc(s)
+        .replace(/\[\[(.+?)\|(https?:\/\/[^\]\s]+?)\]\]/g, (m, label, url) => `<a href="${url}" target="_blank" rel="noopener" class="g-link">${label}</a>`)
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (m, label, url) => `<a href="${url}" target="_blank" rel="noopener" class="g-link">${label}</a>`);
+}
+
+/* ---- 日付の計算(土日のみ除外。祝日・年末年始は含みません) ---- */
+const WEEK_JA = ['日', '月', '火', '水', '木', '金', '土'];
+function addDays(d, n) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n); }
+function addMonthsClamped(d, n) {
+    const x = new Date(d.getFullYear(), d.getMonth() + n, 1);
+    const last = new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate();
+    x.setDate(Math.min(d.getDate(), last)); return x;
+}
+function addBusinessDays(d, n) {
+    let x = new Date(d.getFullYear(), d.getMonth(), d.getDate()), c = 0;
+    while(c < n) { x = addDays(x, 1); const w = x.getDay(); if(w !== 0 && w !== 6) c++; }
+    return x;
+}
+function fmtMD(d) { return `${d.getMonth() + 1}/${d.getDate()}(${WEEK_JA[d.getDay()]})`; }
+function fmtYMD(d) { return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}(${WEEK_JA[d.getDay()]})`; }
+
+// 今日から数えた、最短の掲載開始日と、そこまでのスケジュール(目安)
+function buildSchedule(kind, matDays, matText, lead) {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const answer = addBusinessDays(today, CONFIRM_BDAYS);            // 開催確認の回答の目安
+    let start = addMonthsClamped(answer, 1);                          // 申込期日(開始の1か月前)が、回答のあとになる最短の開始日
+    if(matDays) { const byMat = addDays(answer, matDays); if(byMat > start) start = byMat; } // 素材入稿期限も、回答のあとになる開始日
+    if(kind === 'poster') {                                           // ポスターの掲載開始日は、毎月1日・16日
+        const day = start.getDate();
+        if(day !== 1 && day !== 16) start = (day < 16) ? new Date(start.getFullYear(), start.getMonth(), 16) : new Date(start.getFullYear(), start.getMonth() + 1, 1);
+    }
+    const apply = addMonthsClamped(start, -1);
+    const mat = matDays ? addDays(start, -matDays) : null;
+
+    const items = [
+        { d: today, t: '店舗と相談して案件を決定', s: lead ? `制作の目安: ${lead}(数量によりもっとかかります)` : '制作に日数がかかるので、お早めにご相談ください' },
+        { d: answer, t: '開催確認の回答(目安)', s: `平均${CONFIRM_BDAYS}営業日。店舗ごとの判断のため、もっとかかる場合もあります` }
+    ];
+    const applyItem = { d: apply, t: '申込期日(獲得報告メール)', s: '原則、開催開始日の1か月前' };
+    const matItem = mat ? { d: mat, t: '素材(デザイン)入稿期限', s: matText || '商材ごとに異なります' } : null;
+    if(matItem && matItem.d.getTime() === applyItem.d.getTime()) items.push({ d: apply, t: '申込期日 / 素材入稿期限', s: '獲得報告メールと素材(デザイン)の入稿' });
+    else { items.push(applyItem); if(matItem) items.push(matItem); }
+    items.sort((a, b) => a.d - b.d);
+    items.push({ d: start, t: '掲載開始(最短の目安)', s: kind === 'poster' ? 'ポスターは毎月1日・16日開始です' : '', hl: true });
+    return { today, start, items };
+}
+
+function renderGuide(prod) {
+    const G = window.__GUIDES || { common: { warning: [], flow: [], rule: [] }, items: {} };
+    const kind = productKind(prod.title), def = GUIDE_DEFAULTS[kind] || null, item = guideItemFor(prod);
+    const matDays = (item && item.matDays) || (def && def.matDays) || null;
+    const lead = (item && item.lead) || (def && def.lead) || '';
+    const name = def ? def.name : String(prod.title || '');
+
+    // --- 最短の掲載開始日 + 動的スケジュール ---
+    const sc = buildSchedule(kind, matDays, def ? def.matText : '', lead);
+    const timeline = sc.items.map((it, i) => `${i > 0 ? '<div class="gt-line"></div>' : ''}
+        <div class="gt-item${it.hl ? ' hl' : ''}"><div class="gt-dot"></div><div class="gt-date">${fmtMD(it.d)}</div>
+        <div class="gt-text">${esc(it.t)}${it.s ? `<br><small>${esc(it.s)}</small>` : ''}</div></div>`).join('');
+
+    // --- 警告 ---
+    const warn = (G.common.warning.length ? G.common.warning : [GUIDE_NOTICE]).map(w => guideText(w)).join('<br>');
+
+    // --- 掲載までの流れ(「※」で始まる行は、直前の手順の補足) ---
+    const flowLines = G.common.flow.length ? G.common.flow : GUIDE_FLOW_DEFAULT;
+    const steps = [];
+    flowLines.forEach(l => { if(l.charAt(0) === '※' && steps.length) steps[steps.length - 1].notes.push(l); else steps.push({ t: l, notes: [] }); });
+    const flowHtml = '<ol class="g-ol">' + steps.map(s => `<li><div class="g-step-t">${guideText(s.t)}</div>${s.notes.map(n => `<div class="g-step-n">${guideText(n)}</div>`).join('')}</li>`).join('') + '</ol>';
+
+    // --- 基本ルール ---
+    const rules = G.common.rule.length ? G.common.rule : GUIDE_RULES_DEFAULT;
+    const ruleHtml = '<ul class="g-ul">' + rules.map(r => `<li class="g-li">${guideText(r)}</li>`).join('') + '</ul>';
+
+    // --- 商材ごとの仕様・注意(「説明文」タブにあればそれを、なければ初期文言を使う) ---
+    let secs = [];
+    if(item && (item.spec.length || item.note.length)) {
+        if(item.spec.length) secs.push({ h: '仕様・素材について', items: item.spec });
+        if(item.note.length) secs.push({ h: '注意事項', items: item.note });
+    } else if(def) { secs = def.sections; }
+    const specHtml = secs.length
+        ? secs.map(sec => `<div class="g-sec-h">${esc(sec.h)}</div><ul class="g-ul">${sec.items.map(i => `<li class="g-li">${guideText(i)}</li>`).join('')}</ul>`).join('')
+        : '<div class="g-li">この商材の詳細は、お問い合わせください。</div>';
+
+    return `
+    <div class="g-dynamic-wrap">
+        <div class="g-fast-ans">⏱ 今日(${fmtMD(sc.today)})からご相談を始めた場合の、最短の掲載開始日の目安<br><span class="g-fast-date">${fmtYMD(sc.start)}</span><span class="g-fast-name">${esc(name)}</span></div>
+        <div class="g-warn-box">${warn}</div>
+        <div class="g-timeline">${timeline}</div>
+        <div class="g-sched-note">※土日のみを除いて計算した目安です(祝日・年末年始・店舗の事情は含みません)。実際の日程は、店舗と相談して決定します。</div>
+        <details class="g-accordion"><summary>掲載までの流れ</summary><div class="g-acc-content">${flowHtml}</div></details>
+        <details class="g-accordion"><summary>期日などの基本ルール</summary><div class="g-acc-content">${ruleHtml}</div></details>
+        <details class="g-accordion"><summary>${esc(name)} の仕様・注意事項</summary><div class="g-acc-content">${specHtml}</div></details>
+    </div>`;
+}
+
+/* ============================================================
+ * ③ 申込までの期日進捗ゾーン
+ *   スプレッドシートの「申込期日」タブ: 項目名 / 開始日 / 締切日 / 備考
+ *   (タブがない・データがない・締切が過ぎたものは表示しません)
+ * ============================================================ */
+function parseDateLoose(str) {
+    const m = String(str || '').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+    return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+}
+
+function renderDeadlines(data) {
+    const zone = document.getElementById('deadline-zone'), box = document.getElementById('deadline-list');
+    if(!zone || !box || !data || data.length < 2) return;
+    const head = data[0];
+    const find = (kws, def) => { const i = getColIndex(head, kws); return i !== -1 ? i : def; };
+    const tCol = find(['項目', 'タイトル', '名称'], 0), sCol = find(['開始'], 1), dCol = find(['締切', '期日', '期限'], 2), nCol = find(['備考', 'メモ', '説明'], 3);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const week = ['日', '月', '火', '水', '木', '金', '土'];
+
+    const items = [];
+    for(let i = 1; i < data.length; i++) {
+        const row = data[i] || [];
+        const title = String(row[tCol] || '').trim(); const dl = parseDateLoose(row[dCol]);
+        if(!title || !dl) continue;
+        const left = Math.round((dl - today) / 86400000);
+        if(left < 0) continue; // 締切を過ぎたものは出さない
+        items.push({ title, dl, st: parseDateLoose(row[sCol]), left, note: String(row[nCol] || '').trim() });
+    }
+    if(items.length === 0) return;
+    items.sort((a, b) => a.dl - b.dl);
+
+    box.innerHTML = items.map(it => {
+        const pct = (it.st && it.st < it.dl) ? Math.round(Math.min(1, Math.max(0, (today - it.st) / (it.dl - it.st))) * 100) : null;
+        const cls = it.left === 0 ? 'today' : it.left <= 3 ? 'danger' : it.left <= 7 ? 'warn' : '';
+        const label = it.left === 0 ? '本日締切' : `あと${it.left}日`;
+        const d = `${it.dl.getFullYear()}/${it.dl.getMonth() + 1}/${it.dl.getDate()}(${week[it.dl.getDay()]})`;
+        return `<div class="dl-item ${cls}">
+            <div class="dl-top"><div class="dl-title">${esc(it.title)}</div><div class="dl-badge">${label}</div></div>
+            ${pct !== null ? `<div class="dl-track"><div class="dl-fill" style="width:${it.left === 0 ? 100 : pct}%"></div></div>` : ''}
+            <div class="dl-sub"><span>締切 ${d}</span><span>${esc(it.note)}</span></div>
+        </div>`;
+    }).join('');
+    zone.classList.remove('view-hidden');
+}
+
+/* ============================================================
+ * ⑥ リスト／MAP の切り替え  ⑦ 店舗リスト
+ * ============================================================ */
+// 地図が見えているときは今すぐ実行、リスト表示中は「MAPに切り替えたとき」に実行
+function runOnMap(fn) { if(currentView === 'map') fn(); else pendingMapAction = fn; }
+
+function scrollToToggle() {
+    const el = document.getElementById('view-toggle'); if(!el) return;
+    window.scrollTo({ top: el.getBoundingClientRect().top + window.pageYOffset, behavior: 'smooth' });
+}
+
+window.setView = function(mode, doScroll = true) {
+    currentView = mode;
+    const isMap = mode === 'map';
+    const mc = document.getElementById('map-container'), lv = document.getElementById('list-view'), sr = document.getElementById('sort-row');
+    if(mc) mc.classList.toggle('view-hidden', !isMap);
+    if(lv) lv.classList.toggle('view-hidden', isMap);
+    if(sr) sr.classList.toggle('view-hidden', isMap);
+    const bMap = document.getElementById('seg-map'), bList = document.getElementById('seg-list');
+    if(bMap) bMap.classList.toggle('active', isMap); if(bList) bList.classList.toggle('active', !isMap);
+    if(isMap && map) {
+        setTimeout(() => { map.invalidateSize(); if(pendingMapAction) { const f = pendingMapAction; pendingMapAction = null; f(); } }, 60);
+    }
+    if(doScroll) scrollToToggle();
+}
+
+// 並び替えの更新日用: 日付文字列 → 数値(新しいほど大きい。日付なしは0)
+function dateKey(str) { const d = parseDateLoose(str); return d ? d.getTime() : 0; }
+
+// 距離の基準: 半径検索中はその基準地点、それ以外は現在地
+function sortCenter() {
+    if(searchState.mode === 'radius' && searchState.center) return searchState.center;
+    if(userLat !== null && userLng !== null) return { lat: userLat, lng: userLng, label: '現在地', type: 'current' };
+    return null;
+}
+
+function getVisibleSorted() {
+    const list = stores.filter(isStoreVisible);
+    const sel = document.getElementById('sort-select');
+    let mode = sel ? sel.value : 'distance';
+    const c = sortCenter();
+    if(mode === 'distance' && !c) mode = 'pref'; // 基準がないときは都道府県順
+    const dist = s => getDistance(c.lat, c.lng, s.lat, s.lng);
+    const prefIdx = s => { const i = PREF_ORDER.indexOf(s.pref); return i === -1 ? 999 : i; };
+    list.sort((a, b) => {
+        if(mode === 'distance') return dist(a) - dist(b);
+        if(mode === 'updated') return dateKey(b.updatedAt) - dateKey(a.updatedAt);
+        if(mode === 'name') return String(a.name).localeCompare(String(b.name), 'ja');
+        return (prefIdx(a) - prefIdx(b)) || String(a.city).localeCompare(String(b.city), 'ja') || String(a.name).localeCompare(String(b.name), 'ja');
+    });
+    return list;
+}
+
+function storeCardHtml(s, c) {
+    const ic = icons[s.category] || defaultIconObj;
+    const src = (ic && ic.options && ic.options.iconUrl) ? ic.options.iconUrl : '';
+    const dist = c ? `${c.type === 'point' ? '指定地点' : '現在地'}から ${getDistance(c.lat, c.lng, s.lat, s.lng).toFixed(1)}km` : '';
+    const meta = [s.category ? esc(s.category) : '', dist].filter(Boolean).join(' ・ ');
+    const r = s.records;
+    const body = s.unavailable !== ''
+        ? '<div class="store-unav">掲載不可(施設都合上)</div>'
+        : '<div class="store-rec">' + [['ボックス', r.tissue], ['ポスター', r.poster], ['ゲート', r.gate], ['手渡し', r.register], ['ジャック', r.jack]]
+            .map(([label, v]) => `<div class="rec-chip"><span>${label}</span>${recordBadge(v, 18)}</div>`).join('') + '</div>';
+    return `<div class="store-card">
+        <div class="store-head">${src ? `<img class="store-icon" src="${src}" alt="">` : ''}<div class="store-name">${esc(s.name)}</div>
+            <button type="button" class="store-mapbtn" onclick="focusStore(${s.idx})">地図で見る</button></div>
+        <div class="store-addr">${esc(s.address)}</div>
+        ${meta ? `<div class="store-meta">${meta}</div>` : ''}
+        <div class="store-date">更新日 <b>${esc(s.updatedAt || '未実施')}</b></div>
+        ${body}
+    </div>`;
+}
+
+window.renderStoreList = function(reset) {
+    if(reset !== false) listLimit = PAGE_SIZE;
+    const box = document.getElementById('store-list'); if(!box) return;
+    const list = getVisibleSorted(), c = sortCenter();
+    const cnt = document.getElementById('result-count'); if(cnt) cnt.textContent = `${list.length}件`;
+    box.innerHTML = list.length ? list.slice(0, listLimit).map(s => storeCardHtml(s, c)).join('') : '<div class="list-empty">条件に合う店舗がありません</div>';
+    const more = document.getElementById('list-more');
+    if(more) { more.style.display = list.length > listLimit ? 'block' : 'none'; more.textContent = `さらに表示(残り ${list.length - listLimit} 件)`; }
+}
+
+window.showMoreStores = function() { listLimit += PAGE_SIZE; renderStoreList(false); }
+
+// リストの「地図で見る」: MAPに切り替えて、その店舗にズームしてポップアップを開く
+window.focusStore = function(idx) {
+    const s = stores[idx]; if(!s) return;
+    pendingMapAction = null; // 検索で予約していた「範囲への移動」は取り消して、この店舗へ移動する
+    setView('map');
+    setTimeout(() => {
+        map.stop(); map.invalidateSize(); map.setView([s.lat, s.lng], 16, { animate: false });
+        if(s.marker) { if(!map.hasLayer(s.marker)) s.marker.addTo(map); setTimeout(() => s.marker.openPopup(), 150); }
+    }, 300);
+}
+
+window.__APP_VERSION = 'ui4';
+window.onload = initApp;
