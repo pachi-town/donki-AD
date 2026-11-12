@@ -300,6 +300,8 @@ async function initApp() {
         initMap();
         initSearchUI();
         initProductZone();                 // ④ 商材ゾーン
+        applyResponsiveDefaults();         // スマホ=閉じる / PC=すべて展開
+        if(window.matchMedia) { const mq = window.matchMedia(WIDE_QUERY); if(mq.addEventListener) mq.addEventListener('change', applyResponsiveDefaults); else if(mq.addListener) mq.addListener(applyResponsiveDefaults); }
         renderDeadlines(deadlineData);     // ③ 申込期日の進捗ゾーン
         filterMap();                       // ⑦ 件数とリストを作る
         setView(DEFAULT_VIEW, false);      // ⑥ リスト/MAP の初期表示
@@ -669,6 +671,14 @@ function toggleSearch() {
 /* ============================================================
  * ④ 商材ゾーン(商材ボタンで内容が切り替わる)
  * ============================================================ */
+// スマホは閉じた状態、PC(広い画面)はすべて展開した状態にする(画面の幅が変わったときも切り替える)
+function applyResponsiveDefaults() {
+    const wide = isWide();
+    ['start-acc', 'price-acc'].forEach(id => { const d = document.getElementById(id); if(d) d.open = wide; });
+    document.querySelectorAll('#notice-content details').forEach(d => { d.open = wide; });
+    if(searchOpen !== wide) toggleSearch();
+}
+
 function initProductZone() {
     const tabs = document.getElementById('product-tabs'); if(!tabs) return;
     tabs.innerHTML = '';
@@ -689,26 +699,52 @@ function selectTab(index) {
 
 function renderProductContent(index) {
     const prod = products[index]; if(!prod) return;
-    let optsHtml = prod.options.map((opt, i) => `<option value="${i}">${esc(opt.label)}</option>`).join('');
-    const content = document.getElementById('product-content'); if(!content) return;
+    const P = buildGuideParts(prod);
+    const wide = isWide();
 
-    content.innerHTML = `
-        <h2 class="text-[17px] font-bold mb-4 leading-snug text-gray-800">${esc(prod.title || '')}</h2>
-        ${prod.imageUrl ? `<img src="${esc(prod.imageUrl)}" class="product-image" alt="画像" onerror="this.style.display='none'">` : ''}
-        <div class="bg-yellow-50 p-3.5 rounded-lg border border-yellow-200 mb-5"><span class="bg-yellow-400 text-xs font-bold px-2.5 py-1 rounded">POINT</span><p class="text-sm mt-2 text-gray-700">${esc(prod.point || '')}</p></div>
-        <div class="border border-gray-200 rounded-xl p-4 bg-white shadow-sm">
-            <label class="text-xs text-gray-500 font-bold mb-2 block">数量・期間を選択</label>
-            <select id="lot-select" class="stylish-select w-full mb-4 bg-gray-50" onchange="updatePrice(${index}, this.value)">${optsHtml}</select>
-            <div class="bg-gray-50 p-4 rounded-lg border border-gray-100">
-                <div class="text-xs text-gray-500 font-bold mb-1">料金</div>
-                <div class="text-3xl font-bold mb-2 text-gray-900">
-                    <span id="price-display">${esc(prod.options[0]?.price || '')}</span>
-                    <span class="text-sm font-normal text-gray-500">（税別）</span>
-                </div>
-                <div class="text-xs text-red-500 font-bold" id="note-display">${esc(prod.options[0]?.note || '')}</div>
+    // ① 掲載開始の目安: 見出しには「日付」だけを出し、展開すると 基本ルール・今日から数えたスケジュール・掲載までの流れ
+    const sum = document.getElementById('start-summary');
+    if(sum) sum.innerHTML = `<div class="start-sum">
+        <div class="start-sum-l">⏱ 掲載開始の目安 <span class="g-fast-name">${esc(P.name)}</span></div>
+        <div class="start-sum-date">${fmtYMD(P.sc.start)}</div>
+        <div class="start-sum-s">今日(${fmtMD(P.sc.today)})からご相談を始めた場合<span class="tap-hint"> / タップで期日・スケジュール・流れを表示</span></div></div>`;
+    const startBox = document.getElementById('start-content');
+    if(startBox) startBox.innerHTML = `<div class="start-grid">
+        <div class="sg-col"><div class="sg-h">期日などの基本ルール</div>${P.ruleHtml}</div>
+        <div class="sg-col"><div class="sg-h">今日から数えたスケジュール</div><div class="g-timeline">${P.timeline}</div>
+            <div class="g-sched-note">※土日のみを除いて計算した目安です(祝日・年末年始・店舗の事情は含みません)。実際の日程は、店舗と相談して決定します。</div></div>
+        <div class="sg-col"><div class="sg-h">掲載までの流れ</div>${P.flowHtml}</div></div>`;
+
+    // ② 商材情報・料金(閉じた状態から、タップで展開)
+    const sub = document.getElementById('price-summary'); if(sub) sub.textContent = prod.title || '';
+    const content = document.getElementById('product-content');
+    if(content) {
+        const optsHtml = prod.options.map((opt, i) => `<option value="${i}">${esc(opt.label)}</option>`).join('');
+        content.innerHTML = `<div class="price-grid">
+            <div class="pg-main">
+                <h2 class="text-[17px] font-bold mb-4 leading-snug text-gray-800">${esc(prod.title || '')}</h2>
+                ${prod.imageUrl ? `<img src="${esc(prod.imageUrl)}" class="product-image" alt="画像" onerror="this.style.display='none'">` : ''}
+                <div class="bg-yellow-50 p-3.5 rounded-lg border border-yellow-200 mb-5"><span class="bg-yellow-400 text-xs font-bold px-2.5 py-1 rounded">POINT</span><p class="text-sm mt-2 text-gray-700">${esc(prod.point || '')}</p></div>
             </div>
-        </div>
-        ${renderGuide(prod)}`;
+            <div class="pg-price border border-gray-200 rounded-xl p-4 bg-white shadow-sm">
+                <label class="text-xs text-gray-500 font-bold mb-2 block">数量・期間を選択</label>
+                <select id="lot-select" class="stylish-select w-full mb-4 bg-gray-50" onchange="updatePrice(${index}, this.value)">${optsHtml}</select>
+                <div class="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                    <div class="text-xs text-gray-500 font-bold mb-1">料金</div>
+                    <div class="text-3xl font-bold mb-2 text-gray-900">
+                        <span id="price-display">${esc(prod.options[0]?.price || '')}</span>
+                        <span class="text-sm font-normal text-gray-500">（税別）</span>
+                    </div>
+                    <div class="text-xs text-red-500 font-bold" id="note-display">${esc(prod.options[0]?.note || '')}</div>
+                </div>
+            </div></div>`;
+    }
+
+    // ③ 注意事項(検索・絞り込みと、リスト/MAPの間に表示)
+    const nc = document.getElementById('notice-content');
+    if(nc) nc.innerHTML = `<div class="notice-grid">
+        <div class="g-warn-box">${P.warn}</div>
+        <details class="g-accordion"${wide ? ' open' : ''}><summary>${esc(P.name)} の仕様・注意事項</summary><div class="g-acc-content">${P.specHtml}</div></details></div>`;
 }
 
 window.updatePrice = function(pIdx, oIdx) {
@@ -891,7 +927,8 @@ function buildSchedule(kind, matDays, matText, lead) {
     return { today, start, items };
 }
 
-function renderGuide(prod) {
+// 説明文の部品(警告・スケジュール・流れ・基本ルール・仕様/注意)をまとめて作る
+function buildGuideParts(prod) {
     const G = window.__GUIDES || { common: { warning: [], flow: [], rule: [] }, items: {} };
     const kind = productKind(prod.title), def = GUIDE_DEFAULTS[kind] || null, item = guideItemFor(prod);
     const matDays = (item && item.matDays) || (def && def.matDays) || null;
@@ -927,17 +964,7 @@ function renderGuide(prod) {
         ? secs.map(sec => `<div class="g-sec-h">${esc(sec.h)}</div><ul class="g-ul">${sec.items.map(i => `<li class="g-li">${guideText(i)}</li>`).join('')}</ul>`).join('')
         : '<div class="g-li">この商材の詳細は、お問い合わせください。</div>';
 
-    const op = isWide() ? ' open' : ''; // スマホは閉じた状態が標準 / PCは幅があるので開いた状態
-    return `
-    <div class="g-dynamic-wrap">
-        <div class="g-fast-ans">⏱ 今日(${fmtMD(sc.today)})からご相談を始めた場合の、最短の掲載開始日の目安<br><span class="g-fast-date">${fmtYMD(sc.start)}</span><span class="g-fast-name">${esc(name)}</span></div>
-        <details class="g-accordion g-acc-warn"${op}><summary>⚠ ご注意(必ずお読みください)</summary><div class="g-acc-content"><div class="g-warn-box">${warn}</div></div></details>
-        <details class="g-accordion"${op}><summary>今日から数えたスケジュール</summary><div class="g-acc-content"><div class="g-timeline">${timeline}</div>
-            <div class="g-sched-note">※土日のみを除いて計算した目安です(祝日・年末年始・店舗の事情は含みません)。実際の日程は、店舗と相談して決定します。</div></div></details>
-        <details class="g-accordion"${op}><summary>掲載までの流れ</summary><div class="g-acc-content">${flowHtml}</div></details>
-        <details class="g-accordion"${op}><summary>期日などの基本ルール</summary><div class="g-acc-content">${ruleHtml}</div></details>
-        <details class="g-accordion"${op}><summary>${esc(name)} の仕様・注意事項</summary><div class="g-acc-content">${specHtml}</div></details>
-    </div>`;
+    return { name, sc, warn, timeline, flowHtml, ruleHtml, specHtml };
 }
 
 /* ============================================================
@@ -992,7 +1019,6 @@ function renderDeadlines(data) {
 function runOnMap(fn) { if(currentView === 'map') fn(); else pendingMapAction = fn; }
 
 function scrollToToggle() {
-    if(isWide()) return; // PCは左右2列で、地図が画面に固定されているのでスクロール不要
     const el = document.getElementById('view-toggle'); if(!el) return;
     window.scrollTo({ top: el.getBoundingClientRect().top + window.pageYOffset, behavior: 'smooth' });
 }
@@ -1082,5 +1108,5 @@ window.focusStore = function(idx) {
     }, 300);
 }
 
-window.__APP_VERSION = 'ui5';
+window.__APP_VERSION = 'ui6';
 window.onload = initApp;

@@ -199,22 +199,53 @@ input:checked + .slider:before { transform: translateX(20px); }
 .g-acc-warn[open] { background: #fff; }
 .g-acc-warn summary { color: #b91c1c; }
 
-/* ================= PC(幅960px以上): 左右2列。左=申込スケジュール・商材 / 右=検索・MAP(画面に固定) ================= */
-#col-left, #col-right { display: contents; }
+/* ================= 新しい並び: 商材を選択 → 掲載開始の目安 → 商材情報・料金 → 検索 → 注意事項 → リスト/MAP ================= */
+details.zone.acc-zone { padding: 0; overflow: hidden; }
+.acc-zone > summary { position: relative; display: flex; align-items: center; gap: 6px; padding: 13px 40px 13px 14px; list-style: none; cursor: pointer; user-select: none; }
+.acc-zone > summary::-webkit-details-marker { display: none; }
+.acc-zone > summary::after { content: '＋'; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font-size: 16px; font-weight: 700; color: #9ca3af; }
+.acc-zone[open] > summary::after { content: '－'; }
+.acc-zone > summary:active { background: #f9fafb; }
+.acc-body { padding: 12px 14px 16px; border-top: 1px solid #f3f4f6; }
+.acc-title { font-size: 13px; font-weight: 800; color: #111; }
+.acc-sub { margin-left: 4px; font-size: 11px; font-weight: 600; color: #6b7280; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 掲載開始の目安(見出しに日付だけを大きく表示) */
+#start-acc { border-left: 4px solid #facc15; background: #fffbe6; }
+#start-acc[open] { background: #fff; }
+.start-sum { min-width: 0; }
+.start-sum-l { font-size: 12px; font-weight: 800; color: #4b5563; }
+.start-sum-l .g-fast-name { margin-left: 6px; vertical-align: baseline; }
+.start-sum-date { font-size: 26px; font-weight: 800; line-height: 1.3; color: #b45309; }
+.start-sum-s { font-size: 10px; color: #9ca3af; }
+.start-grid { display: flex; flex-direction: column; gap: 22px; }
+.sg-h { margin-bottom: 8px; padding-left: 8px; border-left: 3px solid #facc15; font-size: 13px; font-weight: 800; color: #111; }
+.start-grid .g-timeline { margin-bottom: 8px; }
+
+/* 商材情報・料金 / 注意事項 */
+.price-grid { display: flex; flex-direction: column; }
+.notice-grid { display: flex; flex-direction: column; gap: 10px; }
+#notice-zone .g-warn-box { margin-bottom: 0; }
+#product-select-zone .product-tabs { padding-bottom: 0; border-bottom: none; }
+
+/* 検索パネルの中身(スマホは縦に並べる) */
+.search-left, .search-right { min-width: 0; }
+
+/* ================= PC(幅960px以上): 同じ並びのまま、横幅を活かす。すべて展開した状態 ================= */
 @media (min-width: 960px) {
-    #app-container { max-width: 1440px; display: grid; grid-template-columns: minmax(400px, 500px) minmax(0, 1fr); column-gap: 16px; align-items: start; padding-bottom: 16px; }
-    #header, #header-banner { grid-column: 1 / -1; }
-    #col-left { display: block; grid-column: 1; padding-bottom: 24px; }
-    #col-left .zone { margin-right: 0; }
-    #col-right { display: flex; flex-direction: column; grid-column: 2; position: sticky; top: 0; height: 100vh; height: 100dvh; box-sizing: border-box; padding: 10px 12px 12px 0; }
-    #col-right .zone { margin: 0 0 8px; flex: 0 0 auto; max-height: 52%; overflow-y: auto; }
-    #view-toggle { position: static; margin-top: 0; flex: 0 0 auto; border: 1px solid #e5e7eb; border-bottom: none; border-radius: 14px 14px 0 0; box-shadow: none; }
-    #list-view { flex: 1 1 0; min-height: 0; overflow-y: auto; padding-bottom: 12px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 14px 14px; background: #f3f4f6; }
-    #map-container { flex: 1 1 0; height: auto; min-height: 0; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 14px 14px; }
-    /* リストは、幅を活かして2列で並べる */
-    #store-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 0 4px; padding: 0 4px 0 0; }
-    .store-card { margin: 8px 0 0 12px; }
-    #list-more { width: calc(100% - 24px); }
-    /* 商材ゾーン: アコーディオンは開いた状態。タブ・価格などは、広めに表示 */
-    .g-fast-date { font-size: 26px; }
+    #app-container { max-width: 1280px; }
+    .product-tabs, .product-tabs[data-n] { flex-wrap: nowrap; }
+    .product-tabs .prod-tab, .product-tabs[data-n] .prod-tab { flex: 1 1 0; height: 40px; font-size: 13px; }
+    .tap-hint { display: none; }
+    .acc-zone > summary { padding-right: 48px; }
+    .start-grid { display: grid; grid-template-columns: 1fr 1.25fr 1.25fr; gap: 32px; align-items: start; }
+    .price-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: start; }
+    .price-grid .product-image { height: 220px; }
+    .notice-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr); gap: 20px; align-items: start; }
+    #search-contents { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 32px; align-items: start; }
+    #search-contents.view-hidden { display: none !important; }
+    .search-right .search-sub { margin-top: 12px; }
+    #store-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); }
+    #deadline-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); column-gap: 28px; }
+    .dl-item, .dl-item:first-child { padding: 10px 0; border-top: none; }
 }
