@@ -104,6 +104,28 @@
             </button>
         </div>
     </div>
+    <!-- 読み込みエラーを画面上部の赤い帯に表示します(app.js が途中で切れている・アップロード漏れ等の原因調査用) -->
+    <script>
+    (function () {
+        function show(msg) {
+            var eb = document.getElementById('error-banner'); if (!eb) return;
+            eb.textContent = (eb.textContent ? eb.textContent + ' / ' : '') + msg; eb.style.display = 'block';
+        }
+        window.addEventListener('error', function (e) {
+            if (!e.message || e.message === 'Script error.') return;   // 外部CDNなどの警告は無視
+            var f = (e.filename || '').split('/').pop().split('?')[0];
+            if (f && f !== 'app.js' && f !== 'index.html') return;
+            show('⚠ エラー: ' + e.message + (f ? ' (' + f + ' ' + e.lineno + '行目)' : ''));
+        });
+        window.addEventListener('unhandledrejection', function (e) { show('⚠ 通信エラー: ' + ((e.reason && e.reason.message) || e.reason)); });
+        window.addEventListener('load', function () {
+            setTimeout(function () {
+                if (typeof initApp !== 'function') show('⚠ app.js を読み込めていません(ファイルが途中で切れている、またはアップロードできていない可能性があります)');
+                if (typeof L === 'undefined') show('⚠ 地図ライブラリ(Leaflet)を読み込めていません。通信環境を確認してください');
+            }, 1500);
+        });
+    })();
+    </script>
     <!-- 過去のバグキャッシュを強制破棄します -->
     <script src="app.js?v=ui2"></script>
 </body>
