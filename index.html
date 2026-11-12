@@ -9,18 +9,36 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=ui2">
 </head>
 <body>
     <div id="error-banner"></div>
     <div id="app-container">
+
+        <!-- ① ヘッダー -->
         <div id="header">
             <div class="font-bold italic text-yellow-400 text-xl">DONKI AD <span class="text-white text-sm not-italic">MAP</span></div>
             <a href="#" class="bg-white text-black text-xs px-3 py-1 rounded-full font-bold flex items-center gap-1">他ツール</a>
         </div>
+
+        <!-- ② ヘッダーバナーゾーン -->
         <img id="header-banner" src="" alt="Header Banner" style="display:none;">
 
-        <div id="search-panel">
+        <!-- ③ 申込までの期日進捗ゾーン(「申込期日」シートにデータがあるときだけ表示) -->
+        <section id="deadline-zone" class="zone view-hidden">
+            <div class="zone-title"><span class="zone-dot"></span>申込スケジュール</div>
+            <div id="deadline-list"></div>
+        </section>
+
+        <!-- ④ 商材に関して選択・表示するゾーン -->
+        <section id="product-zone" class="zone">
+            <div class="zone-title"><span class="zone-dot"></span>商材情報・料金</div>
+            <div class="product-tabs" id="product-tabs"></div>
+            <div id="product-content"></div>
+        </section>
+
+        <!-- ⑤ 検索・ソートゾーン -->
+        <section id="search-panel" class="zone">
             <div class="flex justify-between items-center mb-1" onclick="toggleSearch()" style="cursor: pointer;">
                 <div class="font-bold flex items-center gap-2">🔍 検索・絞り込み</div>
                 <svg id="search-chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 transition-transform"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
@@ -30,7 +48,7 @@
                     <input type="number" id="radius-input" class="w-full bg-transparent px-3 py-2.5 text-sm outline-none text-gray-800" placeholder="現在地からの距離を入力" inputmode="decimal" onkeydown="if(event.key==='Enter'){applySearch(); this.blur();}">
                     <span class="text-xs text-gray-500 font-bold px-3 border-l border-gray-200 whitespace-nowrap bg-gray-100 py-3">km以内</span>
                 </div>
-                
+
                 <div class="flex gap-2">
                     <select id="pref-select" class="stylish-select w-1/2" onchange="updateCities();"><option value="">都道府県</option></select>
                     <select id="city-select" class="stylish-select w-1/2"><option value="">市区町村</option></select>
@@ -40,7 +58,7 @@
                 <button type="button" id="apply-btn" onclick="applySearch()">決定</button>
 
                 <div class="flex gap-2 overflow-x-auto pb-1 items-center" id="category-filters" style="-webkit-overflow-scrolling: touch;"></div>
-                
+
                 <div class="toggle-wrapper mt-2">
                     <label class="toggle-switch">
                         <input type="checkbox" id="show-unavailable" checked onchange="filterMap();"><span class="slider"></span>
@@ -50,25 +68,43 @@
                     <button type="button" id="reset-btn" onclick="resetFilters()">リセット</button>
                 </div>
             </div>
+
+            <!-- 並び替え(リスト表示のときだけ表示) -->
+            <div id="sort-row" class="sort-row view-hidden">
+                <span class="sort-label">並び替え</span>
+                <select id="sort-select" class="stylish-select" onchange="renderStoreList(true)">
+                    <option value="distance">現在地から近い順</option>
+                    <option value="updated">更新日が新しい順</option>
+                    <option value="pref">都道府県順</option>
+                    <option value="name">店舗名順</option>
+                </select>
+            </div>
+        </section>
+
+        <!-- ⑥ リスト／MAP 切り替えボタン(スクロールしても上に固定) -->
+        <div id="view-toggle">
+            <div class="seg">
+                <button type="button" id="seg-list" onclick="setView('list')">リスト</button>
+                <button type="button" id="seg-map" class="active" onclick="setView('map')">MAP</button>
+            </div>
+            <div id="result-count">- 件</div>
         </div>
 
+        <!-- ⑦ 店舗情報が表示されるゾーン(リスト) -->
+        <div id="list-view" class="view-hidden">
+            <div id="store-list"></div>
+            <button type="button" id="list-more" onclick="showMoreStores()" style="display:none;">さらに表示</button>
+        </div>
+
+        <!-- ⑦ 店舗情報が表示されるゾーン(MAP) -->
         <div id="map-container">
             <div id="map"></div>
             <button id="gps-btn" onclick="recenterMap()" title="現在地に戻る">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
             </button>
-            <button id="floating-btn" onclick="openModal()">商材情報・料金を見る</button>
-        </div>
-
-        <div id="modal-overlay" onclick="closeModal()"></div>
-
-        <div id="bottom-modal">
-            <div class="modal-handle" onclick="closeModal()"></div>
-            <div class="modal-tabs" id="modal-tabs"></div>
-            <div class="modal-content" id="modal-content"></div>
         </div>
     </div>
     <!-- 過去のバグキャッシュを強制破棄します -->
-    <script src="app.js?v=RESET"></script>
+    <script src="app.js?v=ui2"></script>
 </body>
 </html>
