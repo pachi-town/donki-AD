@@ -9,7 +9,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <link rel="stylesheet" href="style.css?v=ui2">
+    <link rel="stylesheet" href="style.css?v=ui3">
 </head>
 <body>
     <div id="error-banner"></div>
@@ -39,24 +39,60 @@
 
         <!-- ⑤ 検索・ソートゾーン -->
         <section id="search-panel" class="zone">
-            <div class="flex justify-between items-center mb-1" onclick="toggleSearch()" style="cursor: pointer;">
-                <div class="font-bold flex items-center gap-2">🔍 検索・絞り込み</div>
+            <div class="search-head" onclick="toggleSearch()">
+                <div class="search-head-main">
+                    <div class="search-head-title">🔍 検索・絞り込み</div>
+                    <div id="search-summary" class="search-summary">全国の店舗</div>
+                </div>
                 <svg id="search-chevron" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5 transition-transform"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
             </div>
-            <div id="search-contents" class="space-y-3 hidden mt-3">
-                <div class="flex items-center w-full bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
-                    <input type="number" id="radius-input" class="w-full bg-transparent px-3 py-2.5 text-sm outline-none text-gray-800" placeholder="現在地からの距離を入力" inputmode="decimal" onkeydown="if(event.key==='Enter'){applySearch(); this.blur();}">
-                    <span class="text-xs text-gray-500 font-bold px-3 border-l border-gray-200 whitespace-nowrap bg-gray-100 py-3">km以内</span>
+
+            <div id="search-contents" class="view-hidden">
+                <!-- 検索方法(どれか1つ。別の方法で検索すると、前の条件はリセットされます) -->
+                <div class="seg seg-sm" id="mode-seg">
+                    <button type="button" id="mode-region" class="active" onclick="setSearchMode('region')">エリア</button>
+                    <button type="button" id="mode-radius" onclick="setSearchMode('radius')">半径</button>
+                    <button type="button" id="mode-keyword" onclick="setSearchMode('keyword')">キーワード</button>
                 </div>
 
-                <div class="flex gap-2">
-                    <select id="pref-select" class="stylish-select w-1/2" onchange="updateCities();"><option value="">都道府県</option></select>
-                    <select id="city-select" class="stylish-select w-1/2"><option value="">市区町村</option></select>
+                <!-- ① エリア: 都道府県・市区町村 -->
+                <div id="pane-region" class="search-pane">
+                    <div class="flex gap-2">
+                        <select id="pref-select" class="stylish-select w-1/2" onchange="updateCities();"><option value="">都道府県</option></select>
+                        <select id="city-select" class="stylish-select w-1/2"><option value="">市区町村</option></select>
+                    </div>
+                    <button type="button" class="apply-btn" onclick="applyRegion()">この条件で検索</button>
                 </div>
 
-                <!-- 距離・都道府県・市区町村をまとめて反映する決定ボタン -->
-                <button type="button" id="apply-btn" onclick="applySearch()">決定</button>
+                <!-- ② 半径: 現在地から / 指定した地点から -->
+                <div id="pane-radius" class="search-pane view-hidden">
+                    <div class="seg seg-sm">
+                        <button type="button" id="center-current" class="active" onclick="setCenterType('current')">現在地から</button>
+                        <button type="button" id="center-point-btn" onclick="setCenterType('point')">地点を指定</button>
+                    </div>
+                    <div id="center-point" class="view-hidden">
+                        <div class="addr-row">
+                            <input type="text" id="addr-input" placeholder="住所・駅名・地名(例: 名古屋駅)" onkeydown="if(event.key==='Enter'){searchAddress(); this.blur();}">
+                            <button type="button" class="addr-btn" onclick="searchAddress()">地点を探す</button>
+                        </div>
+                        <div id="addr-results"></div>
+                    </div>
+                    <div id="center-label" class="center-label">基準: 現在地</div>
+                    <div class="radius-row">
+                        <input type="number" id="radius-input" placeholder="半径を入力" inputmode="decimal" onkeydown="if(event.key==='Enter'){applyRadius(); this.blur();}">
+                        <span class="radius-unit">km以内</span>
+                    </div>
+                    <div class="chip-row" id="radius-chips"></div>
+                    <button type="button" class="apply-btn" onclick="applyRadius()">この条件で検索</button>
+                </div>
 
+                <!-- ③ キーワード: 店舗名・住所・市区町村 -->
+                <div id="pane-keyword" class="search-pane view-hidden">
+                    <input type="text" id="keyword-input" class="kw-input" placeholder="店舗名・住所・市区町村(スペースで複数指定)" onkeydown="if(event.key==='Enter'){applyKeyword(); this.blur();}">
+                    <button type="button" class="apply-btn" onclick="applyKeyword()">この条件で検索</button>
+                </div>
+
+                <div class="search-sub">カテゴリ</div>
                 <div class="flex gap-2 overflow-x-auto pb-1 items-center" id="category-filters" style="-webkit-overflow-scrolling: touch;"></div>
 
                 <div class="toggle-wrapper mt-2">
@@ -73,7 +109,7 @@
             <div id="sort-row" class="sort-row view-hidden">
                 <span class="sort-label">並び替え</span>
                 <select id="sort-select" class="stylish-select" onchange="renderStoreList(true)">
-                    <option value="distance">現在地から近い順</option>
+                    <option value="distance">近い順(現在地・指定地点から)</option>
                     <option value="updated">更新日が新しい順</option>
                     <option value="pref">都道府県順</option>
                     <option value="name">店舗名順</option>
@@ -120,13 +156,13 @@
         window.addEventListener('unhandledrejection', function (e) { show('⚠ 通信エラー: ' + ((e.reason && e.reason.message) || e.reason)); });
         window.addEventListener('load', function () {
             setTimeout(function () {
-                if (typeof initApp !== 'function') show('⚠ app.js を読み込めていません(ファイルが途中で切れている、またはアップロードできていない可能性があります)');
+                if (typeof initApp !== 'function' || window.__APP_VERSION !== 'ui3') show('⚠ app.js を読み込めていません(ファイルが途中で切れている、またはアップロードできていない可能性があります)');
                 if (typeof L === 'undefined') show('⚠ 地図ライブラリ(Leaflet)を読み込めていません。通信環境を確認してください');
             }, 1500);
         });
     })();
     </script>
     <!-- 過去のバグキャッシュを強制破棄します -->
-    <script src="app.js?v=ui2"></script>
+    <script src="app.js?v=ui3"></script>
 </body>
 </html>
