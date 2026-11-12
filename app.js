@@ -73,14 +73,15 @@ function kanjiToNum(s) {
 }
 function normAddr(s) {
     let t = kanjiToNum(String(s || '').normalize('NFKC').replace(/\s/g, ''));
-    t = t.replace(/(\d)[ー‐‑‒–—―−](\d)/g, '$1-$2');
+    // 【修正箇所】エラーの原因だった特殊文字を削除し、安全なハイフンだけを残しました
+    t = t.replace(/(\d)[-ー−](\d)/g, '$1-$2');
     t = t.replace(/丁目|番地|番/g, '-').replace(/号/g, '');
     return t.replace(/-+/g, '-').replace(/-$/, '');
 }
 function normText(s) {
     return String(s || '').normalize('NFKC').toLowerCase()
         .replace(/[\u3041-\u3096]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60))
-        .replace(/[\s・･\-]/g, '');
+        .replace(/[\s・･-]/g, '');
 }
 
 // 補正を完全に排除した画像読み込み処理
