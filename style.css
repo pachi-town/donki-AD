@@ -260,3 +260,16 @@ details.zone.acc-zone { padding: 0; overflow: hidden; }
     .g-spec .g-acc-content { column-count: 2; column-gap: 32px; }
     .g-spec .g-sec-h { break-after: avoid; }
 }
+
+
+/* 申請スケジュール: 1項目=日付 + 見出し + 小さな札(文字を減らして、すっきり) */
+.g-timeline { font-size: 13px; margin-bottom: 4px; }
+.gt-item { align-items: center; }
+.gt-dot { margin-top: 0; }
+.gt-date { width: 76px; font-size: 13px; }
+.gt-text { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 6px; font-size: 13px; font-weight: 700; line-height: 1.4; color: #111; }
+.gt-line { height: 14px; }
+.gt-chip { padding: 1px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; white-space: nowrap; color: #4b5563; background: #f3f4f6; }
+.gt-chip.red { font-weight: 700; color: #b91c1c; background: #fee2e2; }
+.g-supp { margin-top: 12px; }
+.g-supp .g-li { font-size: 12px; }

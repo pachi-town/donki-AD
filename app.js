@@ -676,7 +676,7 @@ function toggleSearch() {
 function applyResponsiveDefaults() {
     const wide = isWide();
     ['start-acc', 'price-acc'].forEach(id => { const d = document.getElementById(id); if(d) d.open = wide; });
-    document.querySelectorAll('#product-content details').forEach(d => { d.open = wide; });
+    document.querySelectorAll('#product-content details, #start-content details').forEach(d => { d.open = wide; });
     if(searchOpen !== wide) toggleSearch();
 }
 
@@ -719,8 +719,8 @@ function renderProductContent(index) {
         <div class="start-sum-s">今日(${fmtMD(P.sc.today)})からご相談を始めた場合<span class="tap-hint"> / タップで日程の詳細を表示</span></div></div>`;
     const startBox = document.getElementById('start-content');
     if(startBox) startBox.innerHTML = `<div class="start-grid${P.ruleHtml ? '' : ' single'}">
-        <div class="sg-col"><div class="sg-h">今日から数えたスケジュール</div><div class="g-timeline">${P.timeline}</div>
-            <div class="g-sched-note">※土日のみを除いて計算した目安です(祝日・年末年始・店舗の事情は含みません)。実際の日程は、店舗と相談して決定します。</div></div>
+        <div class="sg-col"><div class="sg-h">申請スケジュール</div><div class="g-timeline">${P.timeline}</div>
+            <details class="g-accordion g-supp"${wide ? ' open' : ''}><summary>補足・注意点</summary><div class="g-acc-content">${P.suppHtml}</div></details></div>
         ${P.ruleHtml ? `<div class="sg-col"><div class="sg-h">期日などの基本ルール</div>${P.ruleHtml}</div>` : ''}</div>`;
 
     // ② 商材情報・料金(閉じた状態から、タップで展開)。料金の下に「仕様・注意事項」を開け閉めできる形で置く
@@ -764,7 +764,8 @@ window.updatePrice = function(pIdx, oIdx) {
  *   文章は、スプレッドシートの「説明文」タブから読み込みます。 列: A=項目 / B=種別 / C=内容
  *     項目「共通」   … 種別: 警告(検索とMAPの間に常に表示) / 基本ルール(掲載開始の目安の中に表示)
  *                      ※種別「流れ」の行は、使いません(流れはスケジュールに統合したので、削除して構いません)
- *     項目「商材名」 … 種別: 仕様 / 注意 / 素材入稿日数(数字・任意) / 制作の目安(文字・任意)
+ *     項目「商材名」 … 種別: 仕様 / 注意 / 素材入稿日数(数字・任意) / 申込日数(数字・任意) / 制作の目安(文字・任意)
+ *                      ※申込日数 = 開催開始日の何日前までに申込が必要か(例: 80)。入れなければ自動で計算します
  *   「警告」の行がないとき・タブが空のときは、下の GUIDE_NOTICE の文言を表示します。
  * ============================================================ */
 const GUIDE_NOTICE = '店舗単位での都度確認になりますので「掲載可能店舗一覧」等のご用意はありません。希望実施ドンキ店舗を必ず選択してご依頼下さい。';
@@ -773,7 +774,7 @@ const CONFIRM_BDAYS = 5; // 開催確認に必要な営業日数(平均)
 
 // 商材ごとの初期設定。matDays: 素材入稿期限(開催日の何日前か) / lead: 制作にかかる日数の目安
 const GUIDE_DEFAULTS = {
-    poster: { name: 'A1ポスター', matDays: 21, lead: '約3週間', matText: '開催日の3週間前', startDays: [1, 16],
+    poster: { name: 'A1ポスター', matDays: 21, lead: '約3週間', matText: '開催日の3週間前', matShort: '開催日の3週間前', startDays: [1, 16],
         sections: [
             { h: '掲示について', items: [
                 '基本的に掲載開始日は毎月1日、16日でお願いします',
@@ -784,7 +785,7 @@ const GUIDE_DEFAULTS = {
             { h: 'サイズ', items: ['A1(594mm×841mm) 縦', '他サイズ希望の際はご相談ください(可能か確認します)。なお、ポスターサイズが小さくなっても価格は変わりません'] },
             { h: '素材(デザイン)受付期限', items: ['開催日の3週間前'] }
         ] },
-    box: { name: 'ボックスティッシュ', matDays: 75, lead: '約2か月', matText: '開催日目安の2か月半前(個数が多い場合は前倒しになる可能性があります)',
+    box: { name: 'ボックスティッシュ', matDays: 75, lead: '約2か月', matShort: '開催日の2か月半前', matText: '開催日目安の2か月半前(個数が多い場合は前倒しになる可能性があります)',
         sections: [
             { h: 'テンプレート', items: ['専用テンプレート有(店舗様でデザインいただける場合は、受注後にお渡しします)'] },
             { h: '素材(デザイン)受付期限', items: ['開催日目安の2か月半前(個数が多い場合は前倒しになる可能性があります)'] },
@@ -795,7 +796,7 @@ const GUIDE_DEFAULTS = {
                 '床面広告(シール): 横向き、A1サイズ(※600×847mm)',
                 '※料金に含まれていますので、別途金額はかかりません'] }
         ] },
-    pocket: { name: 'ポケットティッシュ', matDays: 30, lead: '約1か月', matText: '開催日目安の1か月前(個数が多い場合は前倒しになる可能性があります)',
+    pocket: { name: 'ポケットティッシュ', matDays: 30, lead: '約1か月', matShort: '開催日の1か月前', matText: '開催日目安の1か月前(個数が多い場合は前倒しになる可能性があります)',
         sections: [
             { h: '素材について', items: [
                 'サイズとデザイン: 既定のテンプレートに沿って作成をお願いします。テンプレートは[こちら](https://dmm-amu.cybozu.com/k/808/show#record=325&tab=comments&mode=show&s.keyword=%25E3%2583%2589%25E3%2583%25B3%25E3%2582%25AD&s.app=808)からダウンロードしてください',
@@ -809,7 +810,7 @@ const GUIDE_DEFAULTS = {
                 '配布するレジについては店舗都合に任せておりますので、全レジで配布することをお約束するものではございません。ただし、ご契約する数量を配り終えるまでは必ず配布いたします。ピークタイムやレジ研修など、配布できないタイミングがございます',
                 'セミセルフレジの場合は、手渡しではなく、お客様のカゴにドンキスタッフが入れます。8割以上の店舗がセミセルフ・フルセルフレジに切り替わっておりますので、ポケットティッシュ配布案件は、基本かご入れになります'] }
         ] },
-    gate: { name: 'インパクトゲート', matDays: 45, lead: '約1か月半', matText: '開催日目安の1か月半前(前倒しになる可能性があります)',
+    gate: { name: 'インパクトゲート', matDays: 45, lead: '約1か月半', matShort: '開催日の1か月半前', matText: '開催日目安の1か月半前(前倒しになる可能性があります)',
         sections: [
             { h: 'サイズ・テンプレート', items: ['専用テンプレート有(店舗様でデザインいただける場合は、受注後にお渡しします。店舗により防犯ゲートの形が異なるため、都度ご案内します)'] },
             { h: 'データ形式', items: ['イラレデータ(aiファイル)'] },
@@ -843,10 +844,11 @@ function parseGuideSheet(data) {
             else if(ty === '流れ') g.common.flow.push(val);
             else if(ty === '基本ルール') g.common.rule.push(val);
         } else {
-            const it = g.items[t] = g.items[t] || { spec: [], note: [], matDays: null, lead: '' };
+            const it = g.items[t] = g.items[t] || { spec: [], note: [], matDays: null, applyDays: null, lead: '' };
             if(ty === '仕様') it.spec.push(val);
             else if(ty === '注意') it.note.push(val);
             else if(ty === '素材入稿日数') { const n = parseInt(val, 10); if(n > 0) it.matDays = n; }
+            else if(ty === '申込日数') { const n = parseInt(val, 10); if(n > 0) it.applyDays = n; }
             else if(ty === '制作の目安') it.lead = val;
         }
     }
@@ -886,31 +888,41 @@ function addBusinessDays(d, n) {
 function fmtMD(d) { return `${d.getMonth() + 1}/${d.getDate()}(${WEEK_JA[d.getDay()]})`; }
 function fmtYMD(d) { return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}(${WEEK_JA[d.getDay()]})`; }
 
-// 今日から数えた、最短の掲載開始日と、そこまでのスケジュール(目安)
-function buildSchedule(kind, matDays, matText, lead) {
+// ---- 日程の計算で使う、あけておく日数(目安) ----
+const APPLY_STD_DAYS = 30;   // 申込期日の原則: 開催開始日の1か月前
+const APPLY_LAG_BDAYS = 1;   // 開催確認の回答の「翌営業日」以降に、申込(獲得報告メール)を送る
+const MAT_LAG_DAYS = 7;      // 申込から素材入稿期限まで、最低7日あける(素材を店舗から回収する時間)
+
+// 今日から数えた、最短の掲載開始日と、そこまでの申請スケジュール(目安)
+//   流れ: 相談 → 開催確認の回答(5営業日) → 申込(獲得報告メール) → 素材(デザイン)入稿 → 掲載開始
+//   ・申込期日は原則「開始日の1か月前」。ただし、素材入稿期限がそれより早い商材(ボックスティッシュ等)は、
+//     申込のほうを先にしないと成り立たないので、素材入稿期限の7日前に申込が必要として計算する
+function buildSchedule(kind, matDays, lead, matShort, applyOverride) {
     const today = new Date(); today.setHours(0, 0, 0, 0);
-    const answer = addBusinessDays(today, CONFIRM_BDAYS);            // 開催確認の回答の目安
-    let start = addMonthsClamped(answer, 1);                          // 申込期日(開始の1か月前)が、回答のあとになる最短の開始日
-    if(matDays) { const byMat = addDays(answer, matDays); if(byMat > start) start = byMat; } // 素材入稿期限も、回答のあとになる開始日
-    if(kind === 'poster') {                                           // ポスターの掲載開始日は、毎月1日・16日
+    const answer = addBusinessDays(today, CONFIRM_BDAYS);             // 開催確認の回答の目安
+    const firstApply = addBusinessDays(answer, APPLY_LAG_BDAYS);      // 申込できる最短の日(回答の翌営業日)
+    const applyDays = applyOverride || Math.max(APPLY_STD_DAYS, matDays ? matDays + MAT_LAG_DAYS : 0);
+    const standard = (applyDays === APPLY_STD_DAYS);                   // 原則どおり(開始日の1か月前)か
+
+    let start = standard ? addMonthsClamped(firstApply, 1) : addDays(firstApply, applyDays);
+    if(kind === 'poster') {                                            // ポスターの掲載開始日は、毎月1日・16日
         const day = start.getDate();
         if(day !== 1 && day !== 16) start = (day < 16) ? new Date(start.getFullYear(), start.getMonth(), 16) : new Date(start.getFullYear(), start.getMonth() + 1, 1);
     }
-    const apply = addMonthsClamped(start, -1);
+    const apply = standard ? addMonthsClamped(start, -1) : addDays(start, -applyDays);
     const mat = matDays ? addDays(start, -matDays) : null;
 
-    // 「掲載までの流れ」の内容は、ここ(日付つきのスケジュール)にまとめています。s=補足 / w=注意(赤字)
     const items = [
-        { d: today, t: '店舗と相談して案件を決定', s: [lead ? `制作の目安: ${lead}(数量によりもっとかかります)` : '制作に日数がかかるので、お早めにご相談ください', '商材・数量は、この時点ではまだ確定でなくてOKです'] },
-        { d: answer, t: '開催確認の回答(目安)', s: [`平均${CONFIRM_BDAYS}営業日。店舗ごとの判断のため、もっとかかる場合もあります`], w: 'ドンキ判断でお断りする場合があります' }
+        { d: today, t: '相談・案件を決定', chips: lead ? [{ t: `制作の目安 ${lead}` }] : [] },
+        { d: answer, t: '開催確認の回答', chips: [{ t: `平均${CONFIRM_BDAYS}営業日` }] }
     ];
-    const applyItem = { d: apply, t: '申込期日(獲得報告メール)', s: ['原則、開催開始日の1か月前。事前に店舗と相談して、実施可否を決定してからの申請です'].concat(mat ? [] : ['素材(デザイン)の入稿期限は、商材によって異なります']), w: 'この時点で全ての内容が確定となり、以降、店舗都合のキャンセルは承れません' };
-    const matItem = mat ? { d: mat, t: '素材(デザイン)入稿期限', s: [matText || '商材ごとに異なります', '店舗から素材を回収して、メールで送ります。商材ごとにテンプレートや注意事項が異なります'] } : null;
-    if(matItem && matItem.d.getTime() === applyItem.d.getTime()) items.push({ d: apply, t: '申込期日 / 素材入稿期限', s: applyItem.s.concat(matItem.s), w: applyItem.w });
-    else { items.push(applyItem); if(matItem) items.push(matItem); }
-    items.sort((a, b) => a.d - b.d);
-    items.push({ d: start, t: '掲載開始(最短の目安)', s: kind === 'poster' ? ['ポスターは毎月1日・16日開始です'] : [], hl: true });
-    return { today, start, items };
+    if(mat && mat.getTime() === apply.getTime()) items.push({ d: apply, t: '申込・素材入稿', chips: [{ t: '以降キャンセル不可', red: true }] });
+    else {
+        items.push({ d: apply, t: '申込(獲得報告メール)', chips: [{ t: '以降キャンセル不可', red: true }] });
+        if(mat) items.push({ d: mat, t: '素材(デザイン)入稿', chips: matShort ? [{ t: matShort }] : [] });
+    }
+    items.push({ d: start, t: '掲載開始(最短の目安)', chips: kind === 'poster' ? [{ t: '毎月1日・16日開始' }] : [], hl: true });
+    return { today, start, answer, apply, mat, applyDays, standard, items };
 }
 
 // 説明文の部品(スケジュール・基本ルール・仕様/注意)をまとめて作る
@@ -921,11 +933,21 @@ function buildGuideParts(prod) {
     const lead = (item && item.lead) || (def && def.lead) || '';
     const name = def ? def.name : String(prod.title || '');
 
-    // --- 最短の掲載開始日 + 動的スケジュール ---
-    const sc = buildSchedule(kind, matDays, def ? def.matText : '', lead);
+    // --- 申請スケジュール(1項目=日付+見出し+小さな札)と、補足(文章はこちらにまとめる) ---
+    const applyOverride = (item && item.applyDays) || null;
+    const sc = buildSchedule(kind, matDays, lead, def ? def.matShort : '', applyOverride);
     const timeline = sc.items.map((it, i) => `${i > 0 ? '<div class="gt-line"></div>' : ''}
         <div class="gt-item${it.hl ? ' hl' : ''}"><div class="gt-dot"></div><div class="gt-date">${fmtMD(it.d)}</div>
-        <div class="gt-text">${esc(it.t)}${(it.s || []).map(x => `<br><small>${esc(x)}</small>`).join('')}${it.w ? `<br><small class="gt-w">⚠ ${esc(it.w)}</small>` : ''}</div></div>`).join('');
+        <div class="gt-text">${esc(it.t)}${(it.chips || []).map(c => `<span class="gt-chip${c.red ? ' red' : ''}">${esc(c.t)}</span>`).join('')}</div></div>`).join('');
+    const notes = [
+        '商材・数量は、相談の時点では未確定でもOKです。制作に日数がかかるので、お早めにご相談ください',
+        `開催確認は店舗ごとの判断のため、${CONFIRM_BDAYS}営業日よりかかる場合や、お断りする場合があります`,
+        '申込(獲得報告メール)で内容が確定となり、以降、店舗都合のキャンセルは承れません。申込は、事前に店舗と相談して実施可否を決定してから行います',
+        '素材(デザイン)は店舗から回収して、メールで送ります。テンプレートや注意事項は商材ごとに異なります(「仕様・注意事項」をご確認ください)'
+    ];
+    if(!sc.standard) notes.push(`この商材は素材入稿期限が早いため、申込は、原則(開催開始日の1か月前)より早い、開催開始日の約${sc.applyDays}日前までに必要です`);
+    notes.push(`日程は目安です(土日のみ除外・祝日は含みません)。申込は回答の翌営業日以降、素材入稿は申込の${MAT_LAG_DAYS}日後以降として計算しています。実際の日程は店舗と相談して決定します`);
+    const suppHtml = '<ul class="g-ul">' + notes.map(n => `<li class="g-li">${esc(n)}</li>`).join('') + '</ul>';
 
     // --- 基本ルール(「説明文」タブの 共通/基本ルール の行。ないときは何も出さない) ---
     const ruleHtml = G.common.rule.length ? '<ul class="g-ul">' + G.common.rule.map(r => `<li class="g-li">${guideText(r)}</li>`).join('') + '</ul>' : '';
@@ -940,7 +962,7 @@ function buildGuideParts(prod) {
         ? secs.map(sec => `<div class="g-sec-h">${esc(sec.h)}</div><ul class="g-ul">${sec.items.map(i => `<li class="g-li">${guideText(i)}</li>`).join('')}</ul>`).join('')
         : '<div class="g-li">この商材の詳細は、お問い合わせください。</div>';
 
-    return { name, sc, timeline, ruleHtml, specHtml };
+    return { name, sc, timeline, suppHtml, ruleHtml, specHtml };
 }
 
 /* ============================================================
@@ -1084,5 +1106,5 @@ window.focusStore = function(idx) {
     }, 300);
 }
 
-window.__APP_VERSION = 'ui7';
+window.__APP_VERSION = 'ui8';
 window.onload = initApp;

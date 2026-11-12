@@ -9,7 +9,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <link rel="stylesheet" href="style.css?v=ui7">
+    <link rel="stylesheet" href="style.css?v=ui8">
 </head>
 <body>
     <div id="error-banner"></div>
@@ -173,13 +173,13 @@
         window.addEventListener('unhandledrejection', function (e) { show('⚠ 通信エラー: ' + ((e.reason && e.reason.message) || e.reason)); });
         window.addEventListener('load', function () {
             setTimeout(function () {
-                if (typeof initApp !== 'function' || window.__APP_VERSION !== 'ui7') show('⚠ app.js を読み込めていません(ファイルが途中で切れている、またはアップロードできていない可能性があります)');
+                if (typeof initApp !== 'function' || window.__APP_VERSION !== 'ui8') show('⚠ app.js を読み込めていません(ファイルが途中で切れている、またはアップロードできていない可能性があります)');
                 if (typeof L === 'undefined') show('⚠ 地図ライブラリ(Leaflet)を読み込めていません。通信環境を確認してください');
             }, 1500);
         });
     })();
     </script>
     <!-- 過去のバグキャッシュを強制破棄します -->
-    <script src="app.js?v=ui7" charset="utf-8"></script>
+    <script src="app.js?v=ui8" charset="utf-8"></script>
 </body>
 </html>
