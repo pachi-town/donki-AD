@@ -273,13 +273,17 @@ details.zone.acc-zone { padding: 0; overflow: hidden; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .loading-text { font-size: 14px; font-weight: 700; color: #374151; }
 
-/* ================= 商材ボタン(アイコン付き。スマホでも1列) ================= */
-.product-tabs { display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
-.product-tabs::-webkit-scrollbar { display: none; }
-.prod-tab { flex: 1 0 62px; box-sizing: border-box; height: auto; min-height: 64px; flex-direction: column; gap: 4px; padding: 8px 2px; border-radius: 12px; font-size: 10px; line-height: 1.25; text-align: center; white-space: normal; }
-.pt-ico { display: block; width: 26px; height: 26px; }
+/* ================= 商材ボタン(アイコン付き。スマホでも1列。画面の幅に合わせて大きさが変わる) ================= */
+.product-tabs { display: flex; flex-wrap: nowrap; gap: clamp(3px, 1.2vw, 6px); padding: 0 0 4px; }
+.prod-tab { flex: 1 1 0; min-width: 0; box-sizing: border-box; height: auto; min-height: clamp(54px, 17vw, 66px); flex-direction: column; gap: 3px; padding: 7px 1px; border-radius: 12px; font-size: clamp(8px, 2.5vw, 10px); line-height: 1.25; text-align: center; white-space: normal; overflow: hidden; }
+.prod-tab.active { box-shadow: none; }
+.pt-ico { display: block; width: clamp(20px, 6.4vw, 26px); height: clamp(20px, 6.4vw, 26px); }
 .pt-ico svg, .pt-ico img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .pt-lb { display: block; font-weight: 700; }
+/* 商材が6個以上のときだけ、横にスクロールできる形にする */
+.product-tabs.many { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.product-tabs.many::-webkit-scrollbar { display: none; }
+.product-tabs.many .prod-tab { flex: 0 0 clamp(56px, 16vw, 66px); }
 
 /* ================= 申請スケジュール(見出し + 日程表) ================= */
 .start-sum { min-width: 0; }
@@ -308,6 +312,7 @@ details.zone.acc-zone { padding: 0; overflow: hidden; }
 .hs-note { margin-top: 16px; padding: 9px 12px; border-radius: 10px; font-size: 11px; font-weight: 700; line-height: 1.5; text-align: center; color: #b91c1c; background: #fef2f2; }
 
 @media (min-width: 960px) {
+    .product-tabs { gap: 6px; }
     .prod-tab { flex-direction: row; gap: 8px; min-height: 48px; padding: 6px 10px; font-size: 13px; }
     .pt-ico { width: 24px; height: 24px; }
     .pt-lb br { display: none; }

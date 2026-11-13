@@ -717,6 +717,7 @@ function prodTabHtml(p) {
 function initProductZone() {
     const tabs = document.getElementById('product-tabs'); if(!tabs) return;
     tabs.innerHTML = '';
+    tabs.classList.toggle('many', products.length > 5); // 6個以上のときだけ、横スクロールにする
     products.forEach((p, i) => {
         const t = document.createElement('div'); t.className = `prod-tab ${i === 0 ? 'active' : ''}`;
         t.innerHTML = prodTabHtml(p);
