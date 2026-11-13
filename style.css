@@ -283,11 +283,12 @@ details.zone.acc-zone { padding: 0; overflow: hidden; }
 
 /* ================= 申請スケジュール(見出し + 日程表) ================= */
 .start-sum { min-width: 0; }
-.start-sum-title { font-size: 16px; font-weight: 800; color: #dc2626; }
+.start-sum-title { font-size: clamp(13px, 4.2vw, 16px); font-weight: 800; color: #dc2626; white-space: nowrap; }
 .start-sum-title small { margin-left: 8px; font-size: 11px; font-weight: 500; color: #6b7280; }
 .start-sum-title .g-fast-name { margin-left: 8px; vertical-align: 2px; }
-.start-sum-line { margin-top: 6px; font-size: 13px; font-weight: 800; color: #111; }
-.start-sum-line b { margin: 0 4px; font-size: 19px; color: #dc2626; }
+/* 「最短掲載開始日: ○年○月○日(○) 以降」は、画面の幅に合わせて文字を縮めて、1行に収める(折り返さない) */
+.start-sum-line { margin-top: 6px; font-size: clamp(9px, 3vw, 13px); font-weight: 800; color: #111; white-space: nowrap; overflow: hidden; }
+.start-sum-line b { margin: 0 0.25em; font-size: 1.45em; color: #dc2626; }
 #start-acc .acc-body { border-top: 1px dashed #cbd5e1; }
 
 /* スマホ=縦 */
@@ -323,3 +324,6 @@ details.zone.acc-zone { padding: 0; overflow: hidden; }
 
 .sg-col .g-li { font-size: 12px; line-height: 1.6; color: #374151; }
 .sg-col .g-ul { margin-top: 0; }
+
+#start-acc > summary { padding-right: 34px; }
+@media (min-width: 960px) { .start-sum-line { font-size: 14px; } .start-sum-title { font-size: 17px; } #start-acc > summary { padding-right: 48px; } }
