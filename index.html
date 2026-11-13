@@ -9,9 +9,14 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <link rel="stylesheet" href="style.css?v=ui8">
+    <link rel="stylesheet" href="style.css?v=ui9">
 </head>
 <body>
+    <!-- 読み込み中の表示: スプレッドシートの読み込みが終わるまで、画面全体をおおって操作できないようにします -->
+    <div id="loading-overlay" role="status" aria-live="polite">
+        <div class="spinner"></div>
+        <div class="loading-text">最新のデータを読み込んでいます…</div>
+    </div>
     <div id="error-banner"></div>
     <div id="app-container">
 
@@ -83,14 +88,14 @@
                     </div>
                     <div id="center-point" class="view-hidden">
                         <div class="addr-row">
-                            <input type="text" id="addr-input" placeholder="住所・駅名・地名(例: 名古屋駅)" onkeydown="if(event.key==='Enter'){searchAddress(); this.blur();}">
+                            <input type="text" id="addr-input" placeholder="住所・駅名・地名(例: 名古屋駅)" onkeydown="onEnterKey(event, searchAddress)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
                             <button type="button" class="addr-btn" onclick="searchAddress()">地点を探す</button>
                         </div>
                         <div id="addr-results"></div>
                     </div>
                     <div id="center-label" class="center-label">基準: 現在地</div>
                     <div class="radius-row">
-                        <input type="number" id="radius-input" placeholder="半径を入力" inputmode="decimal" onkeydown="if(event.key==='Enter'){applyRadius(); this.blur();}">
+                        <input type="number" id="radius-input" placeholder="半径を入力" inputmode="decimal" onkeydown="onEnterKey(event, applyRadius)" autocomplete="off" enterkeyhint="search">
                         <span class="radius-unit">km以内</span>
                     </div>
                     <div class="chip-row" id="radius-chips"></div>
@@ -99,7 +104,7 @@
 
                 <!-- ③ キーワード: 店舗名・住所・市区町村 -->
                 <div id="pane-keyword" class="search-pane view-hidden">
-                    <input type="text" id="keyword-input" class="kw-input" placeholder="店舗名・住所・市区町村(スペースで複数指定)" onkeydown="if(event.key==='Enter'){applyKeyword(); this.blur();}">
+                    <input type="text" id="keyword-input" class="kw-input" placeholder="店舗名・住所・市区町村(スペースで複数指定)" onkeydown="onEnterKey(event, applyKeyword)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
                     <button type="button" class="apply-btn" onclick="applyKeyword()">この条件で検索</button>
                 </div>
 
@@ -164,22 +169,28 @@
             var eb = document.getElementById('error-banner'); if (!eb) return;
             eb.textContent = (eb.textContent ? eb.textContent + ' / ' : '') + msg; eb.style.display = 'block';
         }
+        window.hideLoading = function () {
+            var o = document.getElementById('loading-overlay'); if (!o) return;
+            o.classList.add('hide'); setTimeout(function () { o.style.display = 'none'; }, 400);
+        };
+        setTimeout(window.hideLoading, 30000); // 万一、読み込みが終わらなくても、30秒後には操作できるようにする
         window.addEventListener('error', function (e) {
             if (!e.message || e.message === 'Script error.') return;   // 外部CDNなどの警告は無視
             var f = (e.filename || '').split('/').pop().split('?')[0];
             if (f && f !== 'app.js' && f !== 'index.html') return;
             show('⚠ エラー: ' + e.message + (f ? ' (' + f + ' ' + e.lineno + '行目)' : ''));
+            window.hideLoading();
         });
         window.addEventListener('unhandledrejection', function (e) { show('⚠ 通信エラー: ' + ((e.reason && e.reason.message) || e.reason)); });
         window.addEventListener('load', function () {
             setTimeout(function () {
-                if (typeof initApp !== 'function' || window.__APP_VERSION !== 'ui8') show('⚠ app.js を読み込めていません(ファイルが途中で切れている、またはアップロードできていない可能性があります)');
+                if (typeof initApp !== 'function' || window.__APP_VERSION !== 'ui9') show('⚠ app.js を読み込めていません(ファイルが途中で切れている、またはアップロードできていない可能性があります)');
                 if (typeof L === 'undefined') show('⚠ 地図ライブラリ(Leaflet)を読み込めていません。通信環境を確認してください');
             }, 1500);
         });
     })();
     </script>
     <!-- 過去のバグキャッシュを強制破棄します -->
-    <script src="app.js?v=ui8" charset="utf-8"></script>
+    <script src="app.js?v=ui9" charset="utf-8"></script>
 </body>
 </html>

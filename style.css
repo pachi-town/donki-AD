@@ -188,10 +188,6 @@ input:checked + .slider:before { transform: translateX(20px); }
 
 
 /* ================= スマホ: 商材ボタン(最後の段は中央) + アコーディオン ================= */
-.product-tabs { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
-.prod-tab { flex: 0 0 calc((100% - 12px) / 3); box-sizing: border-box; }
-.product-tabs[data-n="1"] .prod-tab { flex-basis: 100%; }
-.product-tabs[data-n="2"] .prod-tab, .product-tabs[data-n="4"] .prod-tab { flex-basis: calc((100% - 6px) / 2); }
 .g-fast-ans { margin-bottom: 12px; }
 .g-accordion .g-warn-box { margin-bottom: 0; }
 .g-accordion .g-timeline { margin-bottom: 8px; }
@@ -211,8 +207,6 @@ details.zone.acc-zone { padding: 0; overflow: hidden; }
 .acc-sub { margin-left: 4px; font-size: 11px; font-weight: 600; color: #6b7280; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* 掲載開始の目安(見出しに日付だけを大きく表示) */
-#start-acc { border-left: 4px solid #facc15; background: #fffbe6; }
-#start-acc[open] { background: #fff; }
 .start-sum { min-width: 0; }
 .start-sum-l { font-size: 12px; font-weight: 800; color: #4b5563; }
 .start-sum-l .g-fast-name { margin-left: 6px; vertical-align: baseline; }
@@ -232,12 +226,9 @@ details.zone.acc-zone { padding: 0; overflow: hidden; }
 /* ================= PC(幅960px以上): 同じ並びのまま、横幅を活かす。すべて展開した状態 ================= */
 @media (min-width: 960px) {
     #app-container { max-width: 1280px; }
-    .product-tabs, .product-tabs[data-n] { flex-wrap: nowrap; }
-    .product-tabs .prod-tab, .product-tabs[data-n] .prod-tab { flex: 1 1 0; height: 40px; font-size: 13px; }
     .tap-hint { display: none; }
     .acc-zone > summary { padding-right: 48px; }
-    .start-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 32px; align-items: start; }
-    .start-grid.single { grid-template-columns: minmax(0, 1fr); }
+    .start-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
     .price-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: start; }
     .price-grid .product-image { height: 220px; }
     #search-contents { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 32px; align-items: start; }
@@ -273,3 +264,62 @@ details.zone.acc-zone { padding: 0; overflow: hidden; }
 .gt-chip.red { font-weight: 700; color: #b91c1c; background: #fee2e2; }
 .g-supp { margin-top: 12px; }
 .g-supp .g-li { font-size: 12px; }
+
+
+/* ================= 読み込み中の表示 ================= */
+#loading-overlay { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 5000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; background: rgba(243, 244, 246, 0.82); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); transition: opacity .35s; touch-action: none; }
+#loading-overlay.hide { opacity: 0; pointer-events: none; }
+.spinner { width: 44px; height: 44px; border: 5px solid #e5e7eb; border-top-color: #3b82f6; border-radius: 50%; animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-size: 14px; font-weight: 700; color: #374151; }
+
+/* ================= 商材ボタン(アイコン付き。スマホでも1列) ================= */
+.product-tabs { display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+.product-tabs::-webkit-scrollbar { display: none; }
+.prod-tab { flex: 1 0 62px; box-sizing: border-box; height: auto; min-height: 64px; flex-direction: column; gap: 4px; padding: 8px 2px; border-radius: 12px; font-size: 10px; line-height: 1.25; text-align: center; white-space: normal; }
+.pt-ico { display: block; width: 26px; height: 26px; }
+.pt-ico svg, .pt-ico img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.pt-lb { display: block; font-weight: 700; }
+
+/* ================= 申請スケジュール(見出し + 日程表) ================= */
+.start-sum { min-width: 0; }
+.start-sum-title { font-size: 16px; font-weight: 800; color: #dc2626; }
+.start-sum-title small { margin-left: 8px; font-size: 11px; font-weight: 500; color: #6b7280; }
+.start-sum-title .g-fast-name { margin-left: 8px; vertical-align: 2px; }
+.start-sum-line { margin-top: 6px; font-size: 13px; font-weight: 800; color: #111; }
+.start-sum-line b { margin: 0 4px; font-size: 19px; color: #dc2626; }
+#start-acc .acc-body { border-top: 1px dashed #cbd5e1; }
+
+/* スマホ=縦 */
+.hs { position: relative; display: flex; flex-direction: column; gap: 16px; padding-top: 4px; }
+.hs::before { content: ''; position: absolute; left: 10px; top: 12px; bottom: 12px; width: 3px; border-radius: 2px; background: #e5e7eb; }
+.hs-item { position: relative; display: flex; align-items: flex-start; gap: 12px; }
+.hs-dot { position: relative; z-index: 1; flex-shrink: 0; width: 23px; height: 23px; box-sizing: border-box; border: 3px solid #9ca3af; border-radius: 50%; background: #fff; }
+.hs-item.last .hs-dot { border-color: #0b7cf5; background: #0b7cf5; }
+.hs-body { min-width: 0; }
+.hs-dt { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; }
+.hs-date { font-size: 15px; font-weight: 800; color: #111; }
+.hs-w { margin-left: 2px; font-size: 11px; font-weight: 500; color: #6b7280; }
+.hs-t { font-size: 13px; font-weight: 700; color: #374151; }
+.hs-sub { margin-top: 1px; font-size: 11px; line-height: 1.5; color: #6b7280; }
+.hs-sub.red { font-weight: 700; color: #dc2626; }
+.hs-item.last .hs-date { color: #0b7cf5; }
+.hs-note { margin-top: 16px; padding: 9px 12px; border-radius: 10px; font-size: 11px; font-weight: 700; line-height: 1.5; text-align: center; color: #b91c1c; background: #fef2f2; }
+
+@media (min-width: 960px) {
+    .prod-tab { flex-direction: row; gap: 8px; min-height: 48px; padding: 6px 10px; font-size: 13px; }
+    .pt-ico { width: 24px; height: 24px; }
+    .pt-lb br { display: none; }
+    /* PC=横軸 */
+    .hs { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 0; padding-top: 6px; }
+    .hs::before { left: calc(50% / var(--n)); right: calc(50% / var(--n)); top: 17px; bottom: auto; width: auto; height: 3px; }
+    .hs-item { flex-direction: column; align-items: center; gap: 10px; padding: 0 8px; text-align: center; }
+    .hs-body { width: 100%; }
+    .hs-dt { flex-direction: column; align-items: center; gap: 2px; }
+    .hs-date { font-size: 17px; }
+    .hs-t { font-size: 13px; }
+    .hs-sub { font-size: 11px; }
+}
+
+.sg-col .g-li { font-size: 12px; line-height: 1.6; color: #374151; }
+.sg-col .g-ul { margin-top: 0; }

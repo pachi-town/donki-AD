@@ -23,6 +23,14 @@ function showNotice(msg) {
     clearTimeout(noticeTimer); noticeTimer = setTimeout(() => t.classList.remove('show'), 3500);
 }
 
+// 入力欄でEnterを押したときの処理。日本語の「変換を確定するEnter」は無視する
+// (変換の途中で検索が走り、入力欄が操作されて、文字が二重に入るのを防ぐため)
+window.onEnterKey = function(e, fn) {
+    if(e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return;
+    e.preventDefault(); fn();
+    if(e.target && e.target.blur) e.target.blur();
+};
+
 async function fetchCSV(sheetName) {
     const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}&_t=${new Date().getTime()}`;
     try {
@@ -181,14 +189,13 @@ async function initApp() {
 
         // --- Icon(複数の候補パスを試して、読める画像を使う) ---
         if(iconData && iconData.length > 1) {
-            for(let i=1; i<iconData.length; i++) {
-                if(iconData[i][0] && iconData[i][1]) {
-                    const catName = iconData[i][0].trim();
-                    const iconObj = await resolvePinIcon(iconData[i][1]);
-                    icons[catName] = iconObj;
-                    if (catName === '専門店') { defaultIconObj = iconObj; }
-                }
-            }
+            await Promise.all(iconData.slice(1).map(async row => {
+                if(!(row[0] && row[1])) return;
+                const catName = row[0].trim();
+                const iconObj = await resolvePinIcon(row[1]);
+                icons[catName] = iconObj;
+                if (catName === '専門店') { defaultIconObj = iconObj; }
+            }));
         }
         if (missingPins.length > 0) {
             showError("⚠ ピン画像が見つかりません: " + [...new Set(missingPins)].join(', ') + "(GitHubの images/pin を確認)");
@@ -309,6 +316,7 @@ async function initApp() {
         getUserLocation(true);
 
     } catch(err) { console.error(err); showError("⚠️ システムエラーが発生しました。"); }
+    finally { if(window.hideLoading) window.hideLoading(); }
 }
 
 // 「MAP表示」列の値が OFF 相当か(空欄・ON は表示)。チェックボックス(FALSE)は対象外 → ON/OFFのプルダウンで運用
@@ -688,14 +696,30 @@ function renderWarn() {
     box.innerHTML = lines.map(w => guideText(w)).join('<br>');
 }
 
+// 商材ボタンのアイコン(線画。色は文字色に合わせて変わる)。画像を使いたいときは「説明文」タブの アイコン の行にURLを入れる
+const PROD_ICONS = {
+    box: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11h16v8.2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M9 11c-.6-2.6.8-4.6 3-6 2.2 1.4 3.6 3.4 3 6"/><path d="M8.5 15h7"/></svg>',
+    poster: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="3" width="12" height="18" rx="1.5"/><path d="M9 7.5h6M9 11h6M9 14.5h3.5"/></svg>',
+    gate: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4M19 21V4M5 4h14"/><rect x="8" y="8.5" width="8" height="6" rx="1"/><path d="M8 18h8"/></svg>',
+    pocket: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="4" width="10" height="16" rx="2"/><path d="M7 8.5h10"/><path d="M10.5 13h3"/></svg>',
+    jack: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 9.5 6 4h12l1.5 5.5"/><path d="M5 9.5V20h14V9.5"/><path d="M4.5 9.5a2.5 2.5 0 0 0 5 0 2.5 2.5 0 0 0 5 0 2.5 2.5 0 0 0 5 0"/><path d="M10 20v-5h4v5"/></svg>',
+    other: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h8l8 8-8 8-8-8z"/><circle cx="8.5" cy="8.5" r="1.2"/></svg>'
+};
+const PROD_LABELS = { box: 'BOX<br>ティッシュ', pocket: 'ティッシュ<br>手渡し', jack: '店舗<br>ジャック', poster: 'ポスター', gate: 'ゲート' };
+
+function prodTabHtml(p) {
+    const kind = productKind(p.title), item = guideItemFor(p);
+    const ico = (item && item.icon) ? `<img src="${esc(item.icon)}" alt="">` : (PROD_ICONS[kind] || PROD_ICONS.other);
+    const label = PROD_LABELS[kind] || esc(getShortTabName(p.title));
+    return `<span class="pt-ico">${ico}</span><span class="pt-lb">${label}</span>`;
+}
+
 function initProductZone() {
     const tabs = document.getElementById('product-tabs'); if(!tabs) return;
     tabs.innerHTML = '';
-    const n = products.length;
-    tabs.dataset.n = String(n); // CSSが、個数に合わせて幅を決める
     products.forEach((p, i) => {
         const t = document.createElement('div'); t.className = `prod-tab ${i === 0 ? 'active' : ''}`;
-        t.innerText = getShortTabName(p.title);
+        t.innerHTML = prodTabHtml(p);
         t.onclick = () => selectTab(i); tabs.appendChild(t);
     });
     if(products.length > 0) renderProductContent(0);
@@ -711,15 +735,15 @@ function renderProductContent(index) {
     const P = buildGuideParts(prod);
     const wide = isWide();
 
-    // ① 掲載開始の目安: 見出しには「日付」だけを出し、展開すると 今日から数えたスケジュール(掲載までの流れを統合)と、基本ルール
+    // ① 申請スケジュール: 見出しには「最短の掲載開始日」だけ。展開すると 日程表(PC=横軸 / スマホ=縦)と補足
     const sum = document.getElementById('start-summary');
     if(sum) sum.innerHTML = `<div class="start-sum">
-        <div class="start-sum-l">⏱ 掲載開始の目安 <span class="g-fast-name">${esc(P.name)}</span></div>
-        <div class="start-sum-date">${fmtYMD(P.sc.start)}</div>
-        <div class="start-sum-s">今日(${fmtMD(P.sc.today)})からご相談を始めた場合<span class="tap-hint"> / タップで日程の詳細を表示</span></div></div>`;
+        <div class="start-sum-title">申請スケジュール<small>(本日:${fmtJP(P.sc.today)})</small></div>
+        <div class="start-sum-line">最短掲載開始日:<b>${fmtJPFull(P.sc.start)}</b>以降</div></div>`;
     const startBox = document.getElementById('start-content');
     if(startBox) startBox.innerHTML = `<div class="start-grid${P.ruleHtml ? '' : ' single'}">
-        <div class="sg-col"><div class="sg-h">申請スケジュール</div><div class="g-timeline">${P.timeline}</div>
+        <div class="sg-col">${P.timeline}
+            <div class="hs-note">※日程は目安です。実際の日程は、店舗と相談して決定します</div>
             <details class="g-accordion g-supp"${wide ? ' open' : ''}><summary>補足・注意点</summary><div class="g-acc-content">${P.suppHtml}</div></details></div>
         ${P.ruleHtml ? `<div class="sg-col"><div class="sg-h">期日などの基本ルール</div>${P.ruleHtml}</div>` : ''}</div>`;
 
@@ -764,7 +788,7 @@ window.updatePrice = function(pIdx, oIdx) {
  *   文章は、スプレッドシートの「説明文」タブから読み込みます。 列: A=項目 / B=種別 / C=内容
  *     項目「共通」   … 種別: 警告(検索とMAPの間に常に表示) / 基本ルール(掲載開始の目安の中に表示)
  *                      ※種別「流れ」の行は、使いません(流れはスケジュールに統合したので、削除して構いません)
- *     項目「商材名」 … 種別: 仕様 / 注意 / 素材入稿日数(数字・任意) / 申込日数(数字・任意) / 制作の目安(文字・任意)
+ *     項目「商材名」 … 種別: 仕様 / 注意 / 素材入稿日数(数字・任意) / 申込日数(数字・任意) / 制作の目安(文字・任意) / アイコン(商材ボタンの画像URL・任意)
  *                      ※申込日数 = 開催開始日の何日前までに申込が必要か(例: 80)。入れなければ自動で計算します
  *   「警告」の行がないとき・タブが空のときは、下の GUIDE_NOTICE の文言を表示します。
  * ============================================================ */
@@ -844,12 +868,13 @@ function parseGuideSheet(data) {
             else if(ty === '流れ') g.common.flow.push(val);
             else if(ty === '基本ルール') g.common.rule.push(val);
         } else {
-            const it = g.items[t] = g.items[t] || { spec: [], note: [], matDays: null, applyDays: null, lead: '' };
+            const it = g.items[t] = g.items[t] || { spec: [], note: [], matDays: null, applyDays: null, lead: '', icon: '' };
             if(ty === '仕様') it.spec.push(val);
             else if(ty === '注意') it.note.push(val);
             else if(ty === '素材入稿日数') { const n = parseInt(val, 10); if(n > 0) it.matDays = n; }
             else if(ty === '申込日数') { const n = parseInt(val, 10); if(n > 0) it.applyDays = n; }
             else if(ty === '制作の目安') it.lead = val;
+            else if(ty === 'アイコン') it.icon = val; // 商材ボタンに使う画像のURL(任意)
         }
     }
     return g;
@@ -885,6 +910,8 @@ function addBusinessDays(d, n) {
     while(c < n) { x = addDays(x, 1); const w = x.getDay(); if(w !== 0 && w !== 6) c++; }
     return x;
 }
+function fmtJP(d) { return `${d.getMonth() + 1}月${d.getDate()}日`; }
+function fmtJPFull(d) { return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日(${WEEK_JA[d.getDay()]})`; }
 function fmtMD(d) { return `${d.getMonth() + 1}/${d.getDate()}(${WEEK_JA[d.getDay()]})`; }
 function fmtYMD(d) { return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}(${WEEK_JA[d.getDay()]})`; }
 
@@ -913,15 +940,15 @@ function buildSchedule(kind, matDays, lead, matShort, applyOverride) {
     const mat = matDays ? addDays(start, -matDays) : null;
 
     const items = [
-        { d: today, t: '相談・案件を決定', chips: lead ? [{ t: `制作の目安 ${lead}` }] : [] },
-        { d: answer, t: '開催確認の回答', chips: [{ t: `平均${CONFIRM_BDAYS}営業日` }] }
+        { d: today, t: '相談・案件を決定', subs: [{ t: lead ? `制作の目安 ${lead}` : 'お早めにご相談ください' }] },
+        { d: answer, t: '開催確認の回答', subs: [{ t: `平均${CONFIRM_BDAYS}営業日` }] }
     ];
-    if(mat && mat.getTime() === apply.getTime()) items.push({ d: apply, t: '申込・素材入稿', chips: [{ t: '以降キャンセル不可', red: true }] });
+    if(mat && mat.getTime() === apply.getTime()) items.push({ d: apply, t: '申込・素材入稿', subs: [{ t: '以降キャンセル不可', red: true }] });
     else {
-        items.push({ d: apply, t: '申込(獲得報告メール)', chips: [{ t: '以降キャンセル不可', red: true }] });
-        if(mat) items.push({ d: mat, t: '素材(デザイン)入稿', chips: matShort ? [{ t: matShort }] : [] });
+        items.push({ d: apply, t: '申込(獲得報告メール)', subs: [{ t: '以降キャンセル不可', red: true }] });
+        if(mat) items.push({ d: mat, t: '素材(デザイン)入稿', subs: matShort ? [{ t: matShort }] : [] });
     }
-    items.push({ d: start, t: '掲載開始(最短の目安)', chips: kind === 'poster' ? [{ t: '毎月1日・16日開始' }] : [], hl: true });
+    items.push({ d: start, t: '最短の掲載開始日', subs: (kind === 'poster' ? [{ t: '毎月1日・16日開始' }] : []).concat([{ t: '上記の日付以降で、日程の調整をお願いします', red: true }]), hl: true });
     return { today, start, answer, apply, mat, applyDays, standard, items };
 }
 
@@ -936,9 +963,10 @@ function buildGuideParts(prod) {
     // --- 申請スケジュール(1項目=日付+見出し+小さな札)と、補足(文章はこちらにまとめる) ---
     const applyOverride = (item && item.applyDays) || null;
     const sc = buildSchedule(kind, matDays, lead, def ? def.matShort : '', applyOverride);
-    const timeline = sc.items.map((it, i) => `${i > 0 ? '<div class="gt-line"></div>' : ''}
-        <div class="gt-item${it.hl ? ' hl' : ''}"><div class="gt-dot"></div><div class="gt-date">${fmtMD(it.d)}</div>
-        <div class="gt-text">${esc(it.t)}${(it.chips || []).map(c => `<span class="gt-chip${c.red ? ' red' : ''}">${esc(c.t)}</span>`).join('')}</div></div>`).join('');
+    const timeline = `<div class="hs" style="--n:${sc.items.length}">` + sc.items.map(it => `
+        <div class="hs-item${it.hl ? ' last' : ''}"><span class="hs-dot"></span>
+            <div class="hs-body"><div class="hs-dt"><b class="hs-date">${fmtJP(it.d)}<span class="hs-w">(${WEEK_JA[it.d.getDay()]})</span></b><span class="hs-t">${esc(it.t)}</span></div>
+            ${(it.subs || []).map(x => `<div class="hs-sub${x.red ? ' red' : ''}">${esc(x.t)}</div>`).join('')}</div></div>`).join('') + '</div>';
     const notes = [
         '商材・数量は、相談の時点では未確定でもOKです。制作に日数がかかるので、お早めにご相談ください',
         `開催確認は店舗ごとの判断のため、${CONFIRM_BDAYS}営業日よりかかる場合や、お断りする場合があります`,
@@ -946,7 +974,7 @@ function buildGuideParts(prod) {
         '素材(デザイン)は店舗から回収して、メールで送ります。テンプレートや注意事項は商材ごとに異なります(「仕様・注意事項」をご確認ください)'
     ];
     if(!sc.standard) notes.push(`この商材は素材入稿期限が早いため、申込は、原則(開催開始日の1か月前)より早い、開催開始日の約${sc.applyDays}日前までに必要です`);
-    notes.push(`日程は目安です(土日のみ除外・祝日は含みません)。申込は回答の翌営業日以降、素材入稿は申込の${MAT_LAG_DAYS}日後以降として計算しています。実際の日程は店舗と相談して決定します`);
+    notes.push(`日程の計算: 土日のみ除外(祝日・年末年始は含みません)。申込は回答の翌営業日以降、素材入稿は申込の${MAT_LAG_DAYS}日後以降として計算しています`);
     const suppHtml = '<ul class="g-ul">' + notes.map(n => `<li class="g-li">${esc(n)}</li>`).join('') + '</ul>';
 
     // --- 基本ルール(「説明文」タブの 共通/基本ルール の行。ないときは何も出さない) ---
@@ -1106,5 +1134,6 @@ window.focusStore = function(idx) {
     }, 300);
 }
 
-window.__APP_VERSION = 'ui8';
-window.onload = initApp;
+window.__APP_VERSION = 'ui9';
+// ページの準備ができたら、すぐにスプレッドシートの読み込みを始める(画像などの完了は待たない)
+if(document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', initApp); } else { initApp(); }
