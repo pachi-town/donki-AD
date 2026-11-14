@@ -1,5 +1,5 @@
 /* ============================================================
- * ドンキAD MAP  app.js (UI v7)
+ * ドンキAD MAP  app.js (UI v8)
  *   ・店舗の位置      … スプレッドシート「店舗座標一覧」A〜F列(店舗名・都道府県・カテゴリ・住所・緯度・経度)
  *   ・タップ時の情報  … 「開催状況集計」(更新日・広告実績・施設情報・MAP表示) ※住所で結びつけ、一致しなければ店舗名で結びつけ
  *   ・そのほか        … Prices(商材) / icon(ピン画像) / ヘッダーバナー / 申込期日(任意) / 商材リンク
@@ -404,6 +404,7 @@ function getUserLocation(isInit = false) {
 
             const z = isInit ? 10 : 12; runOnMap(() => map.setView([userLat, userLng], z));
 
+            // 初回GPS取得時（かつ検索をしていない場合）、現在地の都道府県・市区町村で自動絞り込み
             if (isInit && searchState.mode === 'none') {
                 let closest = null, minDist = Infinity;
                 stores.forEach(s => {
@@ -1098,5 +1099,5 @@ window.focusStore = function(idx) {
     }, 300);
 }
 
-window.__APP_VERSION = 'ui7'; // キャッシュ回避用に一新しています
+window.__APP_VERSION = 'ui15'; // キャッシュ回避用に一新しています
 if(document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', initApp); } else { initApp(); }

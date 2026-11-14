@@ -9,7 +9,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <link rel="stylesheet" href="style.css?v=ui13">
+    <link rel="stylesheet" href="style.css?v=ui15">
 </head>
 <body>
     <!-- 読み込み中の表示 -->
@@ -185,12 +185,14 @@
         window.addEventListener('unhandledrejection', function (e) { show('⚠ 通信エラー: ' + ((e.reason && e.reason.message) || e.reason)); });
         window.addEventListener('load', function () {
             setTimeout(function () {
-                if (typeof initApp !== 'function' || window.__APP_VERSION !== 'ui13') show('⚠ app.js を読み込めていません(ファイルが途中で切れている、またはアップロードできていない可能性があります)');
+                // ここのバージョン表記を ui15 に統一しています
+                if (typeof initApp !== 'function' || window.__APP_VERSION !== 'ui15') show('⚠ app.js を読み込めていません(ファイルが途中で切れている、またはアップロードできていない可能性があります)');
                 if (typeof L === 'undefined') show('⚠ 地図ライブラリ(Leaflet)を読み込めていません。通信環境を確認してください');
             }, 1500);
         });
     })();
     </script>
-    <script src="app.js?v=ui13" charset="utf-8"></script>
+    <!-- キャッシュ回避のバージョンも ui15 に統一しています -->
+    <script src="app.js?v=ui15" charset="utf-8"></script>
 </body>
 </html>
