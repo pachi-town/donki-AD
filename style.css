@@ -236,7 +236,7 @@ details.zone.acc-zone { padding: 0; overflow: hidden; }
     .dl-item, .dl-item:first-child { padding: 10px 0; border-top: none; }
 }
 
-/* ================= 店舗単位の注意文(折り返しなし・中央寄せ・レスポンシブ幅) ================= */
+/* ================= 店舗単位の注意文(見切れず・折り返しなし・中央寄せ) ================= */
 #warn-zone { margin: 10px 12px 0; }
 #warn-zone .g-warn-box { margin-bottom: 0; }
 .g-warn-box {
@@ -246,8 +246,9 @@ details.zone.acc-zone { padding: 0; overflow: hidden; }
     width: 100%; box-sizing: border-box; text-align: center;
 }
 .g-warn-line {
-    font-weight: 800; white-space: nowrap; font-size: clamp(10px, 3.5vw, 15px);
-    letter-spacing: -0.2px; width: 100%; overflow: hidden; text-overflow: ellipsis; line-height: 1.3;
+    font-weight: 800; white-space: nowrap; 
+    font-size: clamp(9px, 3.2vw, 14px); /* ※見切れないように自動で縮小します */
+    letter-spacing: -0.2px; text-align: center;
 }
 .gt-w { font-size: 11px; font-weight: 700; color: #dc2626; }
 
@@ -296,8 +297,11 @@ details.zone.acc-zone { padding: 0; overflow: hidden; }
 .start-sum-title { font-size: clamp(13px, 4.2vw, 16px); font-weight: 800; color: #dc2626; white-space: nowrap; }
 .start-sum-title small { margin-left: 8px; font-size: 11px; font-weight: 500; color: #6b7280; }
 .start-sum-title .g-fast-name { margin-left: 8px; vertical-align: 2px; }
-/* 「最短掲載開始日: ○年○月○日(○) 以降」は、画面の幅に合わせて文字を縮めて、1行に収める(折り返さない) */
-.start-sum-line { margin-top: 6px; font-size: clamp(9px, 3vw, 13px); font-weight: 800; color: #111; white-space: nowrap; overflow: hidden; }
+/* 掲載開始日も折り返さないようにする */
+.start-sum-line { 
+    margin-top: 6px; font-weight: 800; color: #111; 
+    white-space: nowrap; font-size: clamp(9px, 3.2vw, 14px); 
+}
 .start-sum-line b { margin: 0 0.25em; font-size: 1.45em; color: #dc2626; }
 #start-acc .acc-body { border-top: 1px dashed #cbd5e1; }
 
@@ -315,7 +319,14 @@ details.zone.acc-zone { padding: 0; overflow: hidden; }
 .hs-sub { margin-top: 1px; font-size: 11px; line-height: 1.5; color: #6b7280; }
 .hs-sub.red { font-weight: 700; color: #dc2626; }
 .hs-item.last .hs-date { color: #0b7cf5; }
-.hs-note { margin-top: 16px; padding: 9px 12px; border-radius: 10px; font-size: 11px; font-weight: 700; line-height: 1.5; text-align: center; color: #b91c1c; background: #fef2f2; }
+
+/* 日程は目安ですの赤文字ボックス（見切れず・折り返しなし） */
+.hs-note { 
+    margin-top: 16px; padding: 9px 8px; border-radius: 10px; 
+    font-size: clamp(9px, 2.8vw, 12px); font-weight: 700; 
+    white-space: nowrap; letter-spacing: -0.2px;
+    text-align: center; color: #b91c1c; background: #fef2f2; 
+}
 
 @media (min-width: 960px) {
     .product-tabs { gap: 6px; }
@@ -337,4 +348,4 @@ details.zone.acc-zone { padding: 0; overflow: hidden; }
 .sg-col .g-ul { margin-top: 0; }
 
 #start-acc > summary { padding-right: 34px; }
-@media (min-width: 960px) { .start-sum-line { font-size: 14px; } .start-sum-title { font-size: 17px; } #start-acc > summary { padding-right: 48px; } }
+@media (min-width: 960px) { .start-sum-title { font-size: 17px; } #start-acc > summary { padding-right: 48px; } }

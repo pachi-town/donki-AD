@@ -4,15 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ドンキAD MAP</title>
-    <!-- ファビコン(ブラウザのタブに出るアイコン)。index.htmlと同じ階層の favicon.ico を読み込む。?v=1 は古いキャッシュ対策 -->
     <link rel="icon" href="./favicon.ico?v=1" sizes="any">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <link rel="stylesheet" href="style.css?v=ui10">
+    <link rel="stylesheet" href="style.css?v=ui11">
 </head>
 <body>
-    <!-- 読み込み中の表示 -->
     <div id="loading-overlay" role="status" aria-live="polite">
         <div class="spinner"></div>
         <div class="loading-text">最新のデータを読み込んでいます…</div>
@@ -21,27 +19,26 @@
     
     <div id="app-container">
 
-        <!-- ① ヘッダー (ハンバーガーメニュー化) -->
+        <!-- ① ヘッダー -->
         <div id="header">
             <div class="font-bold italic text-yellow-400 text-xl">DONKI AD <span class="text-white text-sm not-italic">MAP</span></div>
             <button id="menu-btn" class="hamburger-btn" onclick="toggleMenu()">
                 <svg viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
             </button>
         </div>
-        <!-- 他ツール用ドロップダウンメニュー -->
         <div id="menu-overlay" onclick="toggleMenu()"></div>
         <div id="dropdown-menu" class="dropdown-menu"></div>
 
         <!-- ② ヘッダーバナーゾーン -->
         <img id="header-banner" src="" alt="Header Banner" style="display:none;">
         
-        <!-- ③ 申込までの期日進捗ゾーン -->
+        <!-- ③ 申込スケジュール -->
         <section id="deadline-zone" class="zone view-hidden">
             <div class="zone-title"><span class="zone-dot"></span>申込スケジュール</div>
             <div id="deadline-list"></div>
         </section>
 
-        <!-- ④-1 商材を選択するボタン -->
+        <!-- ④-1 商材を選択 -->
         <section id="product-select-zone" class="zone">
             <div class="zone-title"><span class="zone-dot"></span>商材を選択</div>
             <div class="product-tabs" id="product-tabs"></div>
@@ -77,7 +74,6 @@
                     <button type="button" id="mode-keyword" onclick="setSearchMode('keyword')">キーワード</button>
                 </div>
 
-                <!-- ① エリア -->
                 <div id="pane-region" class="search-pane">
                     <div class="flex gap-2">
                         <select id="pref-select" class="stylish-select w-1/2" onchange="updateCities();"><option value="">都道府県</option></select>
@@ -86,7 +82,6 @@
                     <button type="button" class="apply-btn" onclick="applyRegion()">この条件で検索</button>
                 </div>
 
-                <!-- ② 半径 -->
                 <div id="pane-radius" class="search-pane view-hidden">
                     <div class="seg seg-sm">
                         <button type="button" id="center-current" class="active" onclick="setCenterType('current')">現在地から</button>
@@ -108,7 +103,6 @@
                     <button type="button" class="apply-btn" onclick="applyRadius()">この条件で検索</button>
                 </div>
 
-                <!-- ③ キーワード -->
                 <div id="pane-keyword" class="search-pane view-hidden">
                     <input type="text" id="keyword-input" class="kw-input" placeholder="店舗名・住所・市区町村(スペースで複数指定)" onkeydown="onEnterKey(event, applyKeyword)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
                     <button type="button" class="apply-btn" onclick="applyKeyword()">この条件で検索</button>
@@ -141,7 +135,7 @@
             </div>
         </section>
 
-        <!-- ⑤-2 店舗単位の注意文 (完全中央寄せ・折り返しなしレスポンシブ対応) -->
+        <!-- ⑤-2 店舗単位の注意文 -->
         <div id="warn-zone"><div id="warn-content" class="g-warn-box"></div></div>
 
         <!-- ⑥ リスト／MAP 切り替えボタン -->
@@ -189,12 +183,12 @@
         window.addEventListener('unhandledrejection', function (e) { show('⚠ 通信エラー: ' + ((e.reason && e.reason.message) || e.reason)); });
         window.addEventListener('load', function () {
             setTimeout(function () {
-                if (typeof initApp !== 'function' || window.__APP_VERSION !== 'ui10') show('⚠ app.js を読み込めていません(ファイルが途中で切れている、またはアップロードできていない可能性があります)');
+                if (typeof initApp !== 'function' || window.__APP_VERSION !== 'ui11') show('⚠ app.js を読み込めていません(ファイルが途中で切れている、またはアップロードできていない可能性があります)');
                 if (typeof L === 'undefined') show('⚠ 地図ライブラリ(Leaflet)を読み込めていません。通信環境を確認してください');
             }, 1500);
         });
     })();
     </script>
-    <script src="app.js?v=ui10" charset="utf-8"></script>
+    <script src="app.js?v=ui11" charset="utf-8"></script>
 </body>
 </html>

@@ -404,7 +404,6 @@ function getUserLocation(isInit = false) {
 
             const z = isInit ? 10 : 12; runOnMap(() => map.setView([userLat, userLng], z));
 
-            // GPS取得時（初回かつ検索をしていない場合）、現在地に最も近い店舗の都道府県で自動絞り込み
             if (isInit && searchState.mode === 'none') {
                 let closest = null, minDist = Infinity;
                 stores.forEach(s => {
@@ -687,7 +686,6 @@ function applyResponsiveDefaults() {
     if(searchOpen !== wide) toggleSearch();
 }
 
-// 店舗単位の注意文を、1行ずつdivで囲むことで折り返しの無い中央寄せデザインを実現
 function renderWarn() {
     const box = document.getElementById('warn-content'); if(!box) return;
     const G = window.__GUIDES || { common: { warning: [] } };
@@ -1093,5 +1091,5 @@ window.focusStore = function(idx) {
     }, 300);
 }
 
-window.__APP_VERSION = 'ui10';
+window.__APP_VERSION = 'ui11';
 if(document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', initApp); } else { initApp(); }
