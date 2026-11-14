@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ドンキAD MAP</title>
+    <title>ドンキAD 店舗検索</title>
     <!-- ファビコン(ブラウザのタブに出るアイコン)。index.htmlと同じ階層の favicon.ico を読み込む。?v=1 は古いキャッシュ対策 -->
     <link rel="icon" href="./favicon.ico?v=1" sizes="any">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <link rel="stylesheet" href="style.css?v=ui15">
+    <link rel="stylesheet" href="style.css?v=ui16">
 </head>
 <body>
     <!-- 読み込み中の表示 -->
@@ -23,7 +23,7 @@
 
         <!-- ① ヘッダー (ハンバーガーメニュー) -->
         <div id="header">
-            <div class="font-bold italic text-yellow-400 text-xl">DONKI AD <span class="text-white text-sm not-italic">MAP</span></div>
+            <div class="font-bold text-yellow-400 text-xl">ドンキAD <span class="text-white text-sm">店舗検索</span></div>
             <button id="menu-btn" class="hamburger-btn" onclick="toggleMenu()">
                 <svg viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
             </button>
@@ -185,14 +185,12 @@
         window.addEventListener('unhandledrejection', function (e) { show('⚠ 通信エラー: ' + ((e.reason && e.reason.message) || e.reason)); });
         window.addEventListener('load', function () {
             setTimeout(function () {
-                // ここのバージョン表記を ui15 に統一しています
-                if (typeof initApp !== 'function' || window.__APP_VERSION !== 'ui15') show('⚠ app.js を読み込めていません(ファイルが途中で切れている、またはアップロードできていない可能性があります)');
+                if (typeof initApp !== 'function' || window.__APP_VERSION !== 'ui16') show('⚠ app.js を読み込めていません(ファイルが途中で切れている、またはアップロードできていない可能性があります)');
                 if (typeof L === 'undefined') show('⚠ 地図ライブラリ(Leaflet)を読み込めていません。通信環境を確認してください');
             }, 1500);
         });
     })();
     </script>
-    <!-- キャッシュ回避のバージョンも ui15 に統一しています -->
-    <script src="app.js?v=ui15" charset="utf-8"></script>
+    <script src="app.js?v=ui16" charset="utf-8"></script>
 </body>
 </html>

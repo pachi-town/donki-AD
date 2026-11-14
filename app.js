@@ -1,5 +1,5 @@
 /* ============================================================
- * ドンキAD MAP  app.js (UI v8)
+ * ドンキAD MAP  app.js (UI v16)
  *   ・店舗の位置      … スプレッドシート「店舗座標一覧」A〜F列(店舗名・都道府県・カテゴリ・住所・緯度・経度)
  *   ・タップ時の情報  … 「開催状況集計」(更新日・広告実績・施設情報・MAP表示) ※住所で結びつけ、一致しなければ店舗名で結びつけ
  *   ・そのほか        … Prices(商材) / icon(ピン画像) / ヘッダーバナー / 申込期日(任意) / 商材リンク
@@ -404,7 +404,7 @@ function getUserLocation(isInit = false) {
 
             const z = isInit ? 10 : 12; runOnMap(() => map.setView([userLat, userLng], z));
 
-            // 初回GPS取得時（かつ検索をしていない場合）、現在地の都道府県・市区町村で自動絞り込み
+            // 初回GPS取得時（かつ検索をしていない場合）、現在地の都道府県・市区町村で自動絞り込み＆ソート変更
             if (isInit && searchState.mode === 'none') {
                 let closest = null, minDist = Infinity;
                 stores.forEach(s => {
@@ -424,6 +424,11 @@ function getUserLocation(isInit = false) {
                     
                     searchState = { mode: 'region', pref: closest.pref, city: cSel ? cSel.value : '', radius: 0, center: null, keyword: '' };
                     setSearchMode('region'); // 検索タブも連動させる
+                    
+                    // リスト表示の初期ソートを「都道府県順」に変更する
+                    const sortSel = document.getElementById('sort-select');
+                    if(sortSel) sortSel.value = 'pref';
+
                     showNotice(`現在地を元に「${closest.pref} ${cSel ? cSel.value : ''}」の店舗を表示しています`);
                 }
             } else if (searchState.mode === 'radius' && searchState.center && searchState.center.type === 'current') {
@@ -742,8 +747,10 @@ function renderProductContent(index) {
 
     const sum = document.getElementById('start-summary');
     if(sum) sum.innerHTML = `<div class="start-sum">
-        <div class="start-sum-title">申請スケジュール<small>(本日:${fmtJP(P.sc.today)})</small></div>
-        <div class="start-sum-line">最短掲載開始日:<b>${fmtJPFull(P.sc.start)}</b>以降</div></div>`;
+        <div class="start-sum-title">本日時点での最短スケジュール</div>
+        <div class="start-sum-s text-gray-500 mt-1">本日: ${fmtJP(P.sc.today)}</div>
+        <div class="start-sum-line">最短掲載開始日:<b>${fmtJP(P.sc.start)}</b> 以降</div></div>`;
+        
     const startBox = document.getElementById('start-content');
     if(startBox) startBox.innerHTML = `<div class="start-grid${P.ruleHtml ? '' : ' single'}">
         <div class="sg-col">${P.timeline}
@@ -884,6 +891,7 @@ function guideText(s) {
         .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (m, label, url) => `<a href="${url}" target="_blank" rel="noopener" class="g-link">${label}</a>`);
 }
 
+// 曜日表示をなくすため、WEEK_JA は定義だけ残して使用しません
 const WEEK_JA = ['日', '月', '火', '水', '木', '金', '土'];
 function addDays(d, n) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n); }
 function addMonthsClamped(d, n) {
@@ -896,10 +904,9 @@ function addBusinessDays(d, n) {
     while(c < n) { x = addDays(x, 1); const w = x.getDay(); if(w !== 0 && w !== 6) c++; }
     return x;
 }
+// 年と曜日なしのフォーマット（見出し用・タイムライン用）
 function fmtJP(d) { return `${d.getMonth() + 1}月${d.getDate()}日`; }
 function fmtJPFull(d) { return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日(${WEEK_JA[d.getDay()]})`; }
-function fmtMD(d) { return `${d.getMonth() + 1}/${d.getDate()}(${WEEK_JA[d.getDay()]})`; }
-function fmtYMD(d) { return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}(${WEEK_JA[d.getDay()]})`; }
 
 const APPLY_STD_DAYS = 30;   
 const APPLY_LAG_BDAYS = 1;   
@@ -942,10 +949,13 @@ function buildGuideParts(prod) {
 
     const applyOverride = (item && item.applyDays) || null;
     const sc = buildSchedule(kind, matDays, lead, def ? def.matShort : '', applyOverride);
+    
+    // タイムラインから曜日表記を削除
     const timeline = `<div class="hs" style="--n:${sc.items.length}">` + sc.items.map(it => `
         <div class="hs-item${it.hl ? ' last' : ''}"><span class="hs-dot"></span>
-            <div class="hs-body"><div class="hs-dt"><b class="hs-date">${fmtJP(it.d)}<span class="hs-w">(${WEEK_JA[it.d.getDay()]})</span></b><span class="hs-t">${esc(it.t)}</span></div>
+            <div class="hs-body"><div class="hs-dt"><b class="hs-date">${fmtJP(it.d)}</b><span class="hs-t">${esc(it.t)}</span></div>
             ${(it.subs || []).map(x => `<div class="hs-sub${x.red ? ' red' : ''}">${esc(x.t)}</div>`).join('')}</div></div>`).join('') + '</div>';
+            
     const notes = [
         '商材・数量は、相談の時点では未確定でもOKです。制作に日数がかかるので、お早めにご相談ください',
         `開催確認は店舗ごとの判断のため、${CONFIRM_BDAYS}営業日よりかかる場合や、お断りする場合があります`,
@@ -1099,5 +1109,5 @@ window.focusStore = function(idx) {
     }, 300);
 }
 
-window.__APP_VERSION = 'ui15'; // キャッシュ回避用に一新しています
+window.__APP_VERSION = 'ui16'; 
 if(document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', initApp); } else { initApp(); }
