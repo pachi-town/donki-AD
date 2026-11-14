@@ -404,7 +404,6 @@ function getUserLocation(isInit = false) {
 
             const z = isInit ? 10 : 12; runOnMap(() => map.setView([userLat, userLng], z));
 
-            // 初回GPS取得時（かつ検索をしていない場合）、現在地の都道府県・市区町村で自動絞り込み
             if (isInit && searchState.mode === 'none') {
                 let closest = null, minDist = Infinity;
                 stores.forEach(s => {
@@ -1099,5 +1098,5 @@ window.focusStore = function(idx) {
     }, 300);
 }
 
-window.__APP_VERSION = 'ui14';
+window.__APP_VERSION = 'ui7'; // キャッシュ回避用に一新しています
 if(document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', initApp); } else { initApp(); }
