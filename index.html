@@ -9,7 +9,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <link rel="stylesheet" href="style.css?v=ui12">
+    <link rel="stylesheet" href="style.css?v=ui13">
 </head>
 <body>
     <!-- 読み込み中の表示 -->
@@ -31,7 +31,7 @@
         <div id="menu-overlay" onclick="toggleMenu()"></div>
         <div id="dropdown-menu" class="dropdown-menu"></div>
 
-        <!-- ② ヘッダーバナーゾーン -->
+        <!-- ② ヘッダーバナーゾーン (比率維持・見切れなし) -->
         <img id="header-banner" src="" alt="Header Banner" style="display:none;">
         
         <!-- ③ 申込スケジュール -->
@@ -185,12 +185,12 @@
         window.addEventListener('unhandledrejection', function (e) { show('⚠ 通信エラー: ' + ((e.reason && e.reason.message) || e.reason)); });
         window.addEventListener('load', function () {
             setTimeout(function () {
-                if (typeof initApp !== 'function' || window.__APP_VERSION !== 'ui12') show('⚠ app.js を読み込めていません(ファイルが途中で切れている、またはアップロードできていない可能性があります)');
+                if (typeof initApp !== 'function' || window.__APP_VERSION !== 'ui13') show('⚠ app.js を読み込めていません(ファイルが途中で切れている、またはアップロードできていない可能性があります)');
                 if (typeof L === 'undefined') show('⚠ 地図ライブラリ(Leaflet)を読み込めていません。通信環境を確認してください');
             }, 1500);
         });
     })();
     </script>
-    <script src="app.js?v=ui12" charset="utf-8"></script>
+    <script src="app.js?v=ui13" charset="utf-8"></script>
 </body>
 </html>
