@@ -9,26 +9,33 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <link rel="stylesheet" href="style.css?v=ui9">
+    <link rel="stylesheet" href="style.css?v=ui10">
 </head>
 <body>
-    <!-- 読み込み中の表示: スプレッドシートの読み込みが終わるまで、画面全体をおおって操作できないようにします -->
+    <!-- 読み込み中の表示 -->
     <div id="loading-overlay" role="status" aria-live="polite">
         <div class="spinner"></div>
         <div class="loading-text">最新のデータを読み込んでいます…</div>
     </div>
     <div id="error-banner"></div>
+    
     <div id="app-container">
 
-        <!-- ① ヘッダー -->
+        <!-- ① ヘッダー (ハンバーガーメニュー化) -->
         <div id="header">
             <div class="font-bold italic text-yellow-400 text-xl">DONKI AD <span class="text-white text-sm not-italic">MAP</span></div>
-            <a href="#" class="bg-white text-black text-xs px-3 py-1 rounded-full font-bold flex items-center gap-1">他ツール</a>
+            <button id="menu-btn" class="hamburger-btn" onclick="toggleMenu()">
+                <svg viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+            </button>
         </div>
+        <!-- 他ツール用ドロップダウンメニュー -->
+        <div id="menu-overlay" onclick="toggleMenu()"></div>
+        <div id="dropdown-menu" class="dropdown-menu"></div>
 
         <!-- ② ヘッダーバナーゾーン -->
         <img id="header-banner" src="" alt="Header Banner" style="display:none;">
-        <!-- ③ 申込までの期日進捗ゾーン(「申込期日」シートにデータがあるときだけ表示) -->
+        
+        <!-- ③ 申込までの期日進捗ゾーン -->
         <section id="deadline-zone" class="zone view-hidden">
             <div class="zone-title"><span class="zone-dot"></span>申込スケジュール</div>
             <div id="deadline-list"></div>
@@ -40,13 +47,13 @@
             <div class="product-tabs" id="product-tabs"></div>
         </section>
 
-        <!-- ④-2 掲載開始の目安(見出しは日付だけ。展開すると 期日などの基本ルール・今日から数えたスケジュール・掲載までの流れ) -->
+        <!-- ④-2 掲載開始の目安 -->
         <details id="start-acc" class="zone acc-zone">
             <summary id="start-summary"></summary>
             <div id="start-content" class="acc-body"></div>
         </details>
 
-        <!-- ④-3 商材情報・料金(閉じた状態から、タップで展開) -->
+        <!-- ④-3 商材情報・料金 -->
         <details id="price-acc" class="zone acc-zone">
             <summary><span class="zone-dot"></span><span class="acc-title">商材情報・料金</span><span id="price-summary" class="acc-sub"></span></summary>
             <div id="product-content" class="acc-body"></div>
@@ -64,14 +71,13 @@
 
             <div id="search-contents" class="view-hidden">
                 <div class="search-left">
-                <!-- 検索方法(どれか1つ。別の方法で検索すると、前の条件はリセットされます) -->
                 <div class="seg seg-sm" id="mode-seg">
                     <button type="button" id="mode-region" class="active" onclick="setSearchMode('region')">エリア</button>
                     <button type="button" id="mode-radius" onclick="setSearchMode('radius')">半径</button>
                     <button type="button" id="mode-keyword" onclick="setSearchMode('keyword')">キーワード</button>
                 </div>
 
-                <!-- ① エリア: 都道府県・市区町村 -->
+                <!-- ① エリア -->
                 <div id="pane-region" class="search-pane">
                     <div class="flex gap-2">
                         <select id="pref-select" class="stylish-select w-1/2" onchange="updateCities();"><option value="">都道府県</option></select>
@@ -80,7 +86,7 @@
                     <button type="button" class="apply-btn" onclick="applyRegion()">この条件で検索</button>
                 </div>
 
-                <!-- ② 半径: 現在地から / 指定した地点から -->
+                <!-- ② 半径 -->
                 <div id="pane-radius" class="search-pane view-hidden">
                     <div class="seg seg-sm">
                         <button type="button" id="center-current" class="active" onclick="setCenterType('current')">現在地から</button>
@@ -102,7 +108,7 @@
                     <button type="button" class="apply-btn" onclick="applyRadius()">この条件で検索</button>
                 </div>
 
-                <!-- ③ キーワード: 店舗名・住所・市区町村 -->
+                <!-- ③ キーワード -->
                 <div id="pane-keyword" class="search-pane view-hidden">
                     <input type="text" id="keyword-input" class="kw-input" placeholder="店舗名・住所・市区町村(スペースで複数指定)" onkeydown="onEnterKey(event, applyKeyword)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
                     <button type="button" class="apply-btn" onclick="applyKeyword()">この条件で検索</button>
@@ -118,13 +124,12 @@
                         <input type="checkbox" id="show-unavailable" checked onchange="filterMap();"><span class="slider"></span>
                     </label>
                     <span class="font-bold text-gray-700 text-sm">掲載不可店舗も表示する</span>
-                    <!-- 検索条件をすべて初期状態に戻すボタン -->
                     <button type="button" id="reset-btn" onclick="resetFilters()">リセット</button>
                 </div>
                 </div>
             </div>
 
-            <!-- 並び替え(リスト表示のときだけ表示) -->
+            <!-- 並び替え -->
             <div id="sort-row" class="sort-row view-hidden">
                 <span class="sort-label">並び替え</span>
                 <select id="sort-select" class="stylish-select" onchange="renderStoreList(true)">
@@ -136,10 +141,10 @@
             </div>
         </section>
 
-        <!-- ⑤-2 店舗単位の注意文(検索・絞り込みと、リスト/MAPの間に常に表示。文言は「説明文」タブの 共通/警告 の行) -->
+        <!-- ⑤-2 店舗単位の注意文 (完全中央寄せ・折り返しなしレスポンシブ対応) -->
         <div id="warn-zone"><div id="warn-content" class="g-warn-box"></div></div>
 
-        <!-- ⑥ リスト／MAP 切り替えボタン(スクロールしても上に固定) -->
+        <!-- ⑥ リスト／MAP 切り替えボタン -->
         <div id="view-toggle">
             <div class="seg">
                 <button type="button" id="seg-list" onclick="setView('list')">リスト</button>
@@ -162,7 +167,7 @@
             </button>
         </div>
     </div>
-    <!-- 読み込みエラーを画面上部の赤い帯に表示します(app.js が途中で切れている・アップロード漏れ等の原因調査用) -->
+    
     <script>
     (function () {
         function show(msg) {
@@ -173,9 +178,9 @@
             var o = document.getElementById('loading-overlay'); if (!o) return;
             o.classList.add('hide'); setTimeout(function () { o.style.display = 'none'; }, 400);
         };
-        setTimeout(window.hideLoading, 30000); // 万一、読み込みが終わらなくても、30秒後には操作できるようにする
+        setTimeout(window.hideLoading, 30000); 
         window.addEventListener('error', function (e) {
-            if (!e.message || e.message === 'Script error.') return;   // 外部CDNなどの警告は無視
+            if (!e.message || e.message === 'Script error.') return;   
             var f = (e.filename || '').split('/').pop().split('?')[0];
             if (f && f !== 'app.js' && f !== 'index.html') return;
             show('⚠ エラー: ' + e.message + (f ? ' (' + f + ' ' + e.lineno + '行目)' : ''));
@@ -184,13 +189,12 @@
         window.addEventListener('unhandledrejection', function (e) { show('⚠ 通信エラー: ' + ((e.reason && e.reason.message) || e.reason)); });
         window.addEventListener('load', function () {
             setTimeout(function () {
-                if (typeof initApp !== 'function' || window.__APP_VERSION !== 'ui9') show('⚠ app.js を読み込めていません(ファイルが途中で切れている、またはアップロードできていない可能性があります)');
+                if (typeof initApp !== 'function' || window.__APP_VERSION !== 'ui10') show('⚠ app.js を読み込めていません(ファイルが途中で切れている、またはアップロードできていない可能性があります)');
                 if (typeof L === 'undefined') show('⚠ 地図ライブラリ(Leaflet)を読み込めていません。通信環境を確認してください');
             }, 1500);
         });
     })();
     </script>
-    <!-- 過去のバグキャッシュを強制破棄します -->
-    <script src="app.js?v=ui9" charset="utf-8"></script>
+    <script src="app.js?v=ui10" charset="utf-8"></script>
 </body>
 </html>
