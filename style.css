@@ -177,8 +177,8 @@ input:checked + .slider:before { transform: translateX(20px); }
 .g-fast-name { margin-left: 8px; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; color: #854d0e; background: #fef9c3; vertical-align: 3px; }
 .g-sched-note { margin: 6px 0 0; font-size: 10px; line-height: 1.5; color: #9ca3af; }
 .g-accordion { margin-top: 8px; }
-.g-accordion summary::after { content: '＋'; float: right; font-weight: 700; color: #9ca3af; }
-.g-accordion[open] summary::after { content: '－'; }
+.g-accordion summary::after { content: '▼'; float: right; font-weight: 700; color: #9ca3af; font-size: 13px; }
+.g-accordion[open] summary::after { content: '▲'; }
 .g-ol { margin: 0; padding: 0; list-style: none; counter-reset: gstep; }
 .g-ol > li { position: relative; padding: 0 0 12px 34px; counter-increment: gstep; }
 .g-ol > li::before { content: counter(gstep); position: absolute; left: 0; top: 0; width: 24px; height: 24px; border-radius: 50%; font-size: 12px; font-weight: 800; line-height: 24px; text-align: center; color: #facc15; background: #111; }
@@ -199,8 +199,8 @@ input:checked + .slider:before { transform: translateX(20px); }
 details.zone.acc-zone { padding: 0; overflow: hidden; }
 .acc-zone > summary { position: relative; display: flex; align-items: center; gap: 6px; padding: 13px 40px 13px 14px; list-style: none; cursor: pointer; user-select: none; }
 .acc-zone > summary::-webkit-details-marker { display: none; }
-.acc-zone > summary::after { content: '＋'; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font-size: 16px; font-weight: 700; color: #9ca3af; }
-.acc-zone[open] > summary::after { content: '－'; }
+.acc-zone > summary::after { content: '▼'; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font-size: 15px; font-weight: 700; color: #9ca3af; }
+.acc-zone[open] > summary::after { content: '▲'; }
 .acc-zone > summary:active { background: #f9fafb; }
 .acc-body { padding: 12px 14px 16px; border-top: 1px solid #f3f4f6; }
 .acc-title { font-size: 13px; font-weight: 800; color: #111; }

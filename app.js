@@ -93,6 +93,7 @@ function getShortTabName(title) {
 const AMP = String.fromCharCode(38);
 const ESC_MAP = { '&': AMP + 'amp;', '<': AMP + 'lt;', '>': AMP + 'gt;', '"': AMP + 'quot;', "'": AMP + '#39;' };
 function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ESC_MAP[c]); }
+function escHtml(v) { return esc(v).replace(/<br\s*\/?[>>]/gi, '<br>').replace(/\n/g, '<br>'); }
 
 // 漢数字 → 算用数字(「三条」「四丁目」など、条・丁目・番・号の直前だけ)
 function kanjiToNum(s) {
@@ -172,8 +173,8 @@ async function resolvePinIcon(rawUrl) {
  * ============================================================ */
 async function initApp() {
     try {
-        const [coordsData, statusData, pricesData, iconData, bannerData, deadlineData, guideData] = await Promise.all([
-            fetchCSV('店舗座標一覧'), fetchCSV('開催状況集計'), fetchCSV('Prices'), fetchCSV('icon'), fetchCSV('ヘッダーバナー'), fetchCSV('申込期日'), fetchCSV('説明文')
+        const [coordsData, statusData, pricesData, iconData, bannerData, deadlineData, guideData, linkData] = await Promise.all([
+            fetchCSV('店舗座標一覧'), fetchCSV('開催状況集計'), fetchCSV('Prices'), fetchCSV('icon'), fetchCSV('ヘッダーバナー'), fetchCSV('申込期日'), fetchCSV('説明文'), fetchCSV('商材リンク')
         ]);
         window.__GUIDES = parseGuideSheet(guideData); // 商材ゾーンの説明文(空なら初期文言を使用)
         if(coordsData.length === 0) showError("⚠️ 店舗データが取得できませんでした。");
@@ -184,6 +185,20 @@ async function initApp() {
             if(bannerUrl) {
                 const img = document.getElementById('header-banner');
                 if(img){ img.src = bannerUrl.trim(); img.style.display = 'block'; if(bannerLink) img.onclick = () => window.open(bannerLink, '_blank'); }
+            }
+        }
+
+        // --- 商材リンク (ヘッダーの「他ツール」ボタン用) ---
+        if(linkData && linkData.length > 1) {
+            const linkImg = linkData[1][0]; 
+            const linkUrl = linkData[1][1];
+            const headerToolBtn = document.querySelector('#header a');
+            if(headerToolBtn && linkUrl) {
+                headerToolBtn.href = linkUrl.trim();
+                headerToolBtn.target = "_blank";
+                if(linkImg) {
+                    headerToolBtn.innerHTML = `<img src="${linkImg.trim()}" style="height:14px; width:auto; display:inline-block; vertical-align:middle; margin-right:4px;" alt="">他ツール`;
+                }
             }
         }
 
@@ -757,7 +772,7 @@ function renderProductContent(index) {
             <div class="pg-main">
                 <h2 class="text-[17px] font-bold mb-4 leading-snug text-gray-800">${esc(prod.title || '')}</h2>
                 ${prod.imageUrl ? `<img src="${esc(prod.imageUrl)}" class="product-image" alt="画像" onerror="this.style.display='none'">` : ''}
-                <div class="bg-yellow-50 p-3.5 rounded-lg border border-yellow-200 mb-5"><span class="bg-yellow-400 text-xs font-bold px-2.5 py-1 rounded">POINT</span><p class="text-sm mt-2 text-gray-700">${esc(prod.point || '')}</p></div>
+                <div class="bg-yellow-50 p-3.5 rounded-lg border border-yellow-200 mb-5"><span class="bg-yellow-400 text-xs font-bold px-2.5 py-1 rounded">POINT</span><p class="text-sm mt-2 text-gray-700">${escHtml(prod.point || '')}</p></div>
             </div>
             <div class="pg-price border border-gray-200 rounded-xl p-4 bg-white shadow-sm">
                 <label class="text-xs text-gray-500 font-bold mb-2 block">数量・期間を選択</label>
@@ -893,7 +908,7 @@ function guideItemFor(prod) {
 
 // 「[表示する文字](URL)」と「[[表示する文字|URL]]」をリンクにする(それ以外の文字は無害化)
 function guideText(s) {
-    return esc(s)
+    return escHtml(s)
         .replace(/\[\[(.+?)\|(https?:\/\/[^\]\s]+?)\]\]/g, (m, label, url) => `<a href="${url}" target="_blank" rel="noopener" class="g-link">${label}</a>`)
         .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (m, label, url) => `<a href="${url}" target="_blank" rel="noopener" class="g-link">${label}</a>`);
 }
