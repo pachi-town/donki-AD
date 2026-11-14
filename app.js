@@ -1,5 +1,5 @@
 /* ============================================================
- * ドンキAD MAP  app.js (UI v6)
+ * ドンキAD MAP  app.js (UI v7)
  *   ・店舗の位置      … スプレッドシート「店舗座標一覧」A〜F列(店舗名・都道府県・カテゴリ・住所・緯度・経度)
  *   ・タップ時の情報  … 「開催状況集計」(更新日・広告実績・施設情報・MAP表示) ※住所で結びつけ、一致しなければ店舗名で結びつけ
  *   ・そのほか        … Prices(商材) / icon(ピン画像) / ヘッダーバナー / 申込期日(任意) / 商材リンク
@@ -1099,5 +1099,5 @@ window.focusStore = function(idx) {
     }, 300);
 }
 
-window.__APP_VERSION = 'ui13';
+window.__APP_VERSION = 'ui14';
 if(document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', initApp); } else { initApp(); }
