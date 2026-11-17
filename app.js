@@ -1,5 +1,5 @@
 /* ============================================================
- * ドンキAD MAP  app.js (UI v16)
+ * ドンキAD MAP  app.js (UI v17)
  *   ・店舗の位置      … スプレッドシート「店舗座標一覧」A〜F列(店舗名・都道府県・カテゴリ・住所・緯度・経度)
  *   ・タップ時の情報  … 「開催状況集計」(更新日・広告実績・施設情報・MAP表示) ※住所で結びつけ、一致しなければ店舗名で結びつけ
  *   ・そのほか        … Prices(商材) / icon(ピン画像) / ヘッダーバナー / 申込期日(任意) / 商材リンク
@@ -758,6 +758,14 @@ function renderProductContent(index) {
             <details class="g-accordion g-supp"${wide ? ' open' : ''}><summary>補足・注意点</summary><div class="g-acc-content">${P.suppHtml}</div></details></div>
         ${P.ruleHtml ? `<div class="sg-col"><div class="sg-h">期日などの基本ルール</div>${P.ruleHtml}</div>` : ''}</div>`;
 
+    const isBoxTissue = String(prod.title || '').includes('ボックスティッシュ') || String(prod.title || '').includes('BOX');
+    const boxNoticeHtml = isBoxTissue 
+        ? `<div class="price-note-box">
+             <div class="price-note-line">※表示される料金は目安となります</div>
+             <div class="price-note-line">金額をお約束するものではなく、都度見積が必要です</div>
+           </div>`
+        : '';
+
     const sub = document.getElementById('price-summary'); if(sub) sub.textContent = prod.title || '';
     const content = document.getElementById('product-content');
     if(content) {
@@ -778,6 +786,7 @@ function renderProductContent(index) {
                         <span class="text-sm font-normal text-gray-500">（税別）</span>
                     </div>
                     <div class="text-xs text-red-500 font-bold" id="note-display">${esc(prod.options[0]?.note || '')}</div>
+                    ${boxNoticeHtml}
                 </div>
             </div></div>
             <details class="g-accordion g-spec"${wide ? ' open' : ''}><summary>${esc(P.name)} の仕様・注意事項</summary><div class="g-acc-content">${P.specHtml}</div></details>`;
@@ -837,7 +846,7 @@ const GUIDE_DEFAULTS = {
             { h: 'サイズ・テンプレート', items: ['専用テンプレート有(店舗様でデザインいただける場合は、受注後にお渡しします。店舗により防犯ゲートの形が異なるため、都度ご案内します)'] },
             { h: 'データ形式', items: ['イラレデータ(aiファイル)'] },
             { h: '素材(デザイン)受付期限', items: ['開催日目安の1か月半前(前倒しになる可能性があります)'] },
-            { h: '注意事項', items: ['掲示タイミングは、開始日の夕方以降になる場合があります', '店舗様での印刷と持ち込みはNGです。※防犯機能等の問題からトラブル回避のため'] }
+            { h: '注意事項', items: ['掲ختیタイミングは、開始日の夕方以降になる場合があります', '店舗様での印刷と持ち込みはNGです。※防犯機能等の問題からトラブル回避のため'] }
         ] },
     jack: { name: '店舗内装飾ジャック', matDays: null, lead: '', matText: '', sections: [] }
 };
@@ -891,7 +900,6 @@ function guideText(s) {
         .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (m, label, url) => `<a href="${url}" target="_blank" rel="noopener" class="g-link">${label}</a>`);
 }
 
-// 曜日表示をなくすため、WEEK_JA は定義だけ残して使用しません
 const WEEK_JA = ['日', '月', '火', '水', '木', '金', '土'];
 function addDays(d, n) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n); }
 function addMonthsClamped(d, n) {
@@ -904,7 +912,6 @@ function addBusinessDays(d, n) {
     while(c < n) { x = addDays(x, 1); const w = x.getDay(); if(w !== 0 && w !== 6) c++; }
     return x;
 }
-// 年と曜日なしのフォーマット（見出し用・タイムライン用）
 function fmtJP(d) { return `${d.getMonth() + 1}月${d.getDate()}日`; }
 function fmtJPFull(d) { return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日(${WEEK_JA[d.getDay()]})`; }
 
@@ -950,7 +957,6 @@ function buildGuideParts(prod) {
     const applyOverride = (item && item.applyDays) || null;
     const sc = buildSchedule(kind, matDays, lead, def ? def.matShort : '', applyOverride);
     
-    // タイムラインから曜日表記を削除
     const timeline = `<div class="hs" style="--n:${sc.items.length}">` + sc.items.map(it => `
         <div class="hs-item${it.hl ? ' last' : ''}"><span class="hs-dot"></span>
             <div class="hs-body"><div class="hs-dt"><b class="hs-date">${fmtJP(it.d)}</b><span class="hs-t">${esc(it.t)}</span></div>
@@ -1109,5 +1115,5 @@ window.focusStore = function(idx) {
     }, 300);
 }
 
-window.__APP_VERSION = 'ui16'; 
+window.__APP_VERSION = 'ui17'; 
 if(document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', initApp); } else { initApp(); }

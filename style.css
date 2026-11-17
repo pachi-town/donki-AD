@@ -277,7 +277,7 @@ details.zone.acc-zone { padding: 0; overflow: hidden; }
 .g-timeline { font-size: 13px; margin-bottom: 4px; }
 .gt-item { align-items: center; }
 .gt-dot { margin-top: 0; }
-.gt-date { width: 76px; font-size: 13px; }
+.gt-date { width: 44px; font-size: 13px; }
 .gt-text { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 6px; font-size: 13px; font-weight: 700; line-height: 1.4; color: #111; }
 .gt-line { height: 14px; }
 .gt-chip { padding: 1px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; white-space: nowrap; color: #4b5563; background: #f3f4f6; }
@@ -340,6 +340,22 @@ details.zone.acc-zone { padding: 0; overflow: hidden; }
 @supports (container-type: inline-size) {
     .hs-note {
         font-size: clamp(8px, 3.4cqi, 12px);
+    }
+}
+
+/* 価格表示下の赤字注記用 */
+.price-note-box {
+    margin-top: 10px; padding-top: 8px; border-top: 1px dashed #d1d5db;
+    display: flex; flex-direction: column; gap: 3px;
+    container-type: inline-size; overflow: hidden; width: 100%;
+}
+.price-note-line {
+    color: #dc2626; font-weight: 700; white-space: nowrap;
+    letter-spacing: -0.3px; font-size: clamp(8px, 3.2vw, 11px);
+}
+@supports (container-type: inline-size) {
+    .price-note-line {
+        font-size: clamp(8px, 4cqi, 11px);
     }
 }
 
